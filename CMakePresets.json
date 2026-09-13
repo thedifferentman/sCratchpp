@@ -1,0 +1,20 @@
+{
+  "version": 5,
+  "cmakeMinimumRequired": {"major": 3, "minor": 24, "patch": 0},
+  "configurePresets": [
+    {
+      "name": "clang",
+      "displayName": "Clang + libc++ + LLD (Ninja)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/clang",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "SCRATCH_STDLIB": "libc++",
+        "SCRATCH_LINKER": "lld"
+      }
+    }
+  ],
+  "buildPresets": [{"name": "clang", "configurePreset": "clang"}],
+  "testPresets": [{"name": "clang", "configurePreset": "clang", "output": {"outputOnFailure": true}}]
+}

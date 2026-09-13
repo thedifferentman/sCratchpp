@@ -1,0 +1,24 @@
+{
+  "name": "scratchpp-vm-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Real Scratch and TurboWarp VM execution tests for scratchpp",
+  "scripts": {
+    "test": "node --test vm_runner.test.cjs compiler_path.test.cjs"
+  },
+  "dependencies": {
+    "scratch-vm": "5.0.300",
+    "scratch-storage": "6.2.1",
+    "turbowarp-vm": "https://codeload.github.com/TurboWarp/scratch-vm/tar.gz/c4823421cb7c17d8d8a89878851ce1668c26a21f",
+    "@turbowarp/scratch-svg-renderer": "1.1.0",
+    "jszip": "3.10.1"
+  },
+  "overrides": {
+    "turbowarp-vm": {
+      "scratch-parser": "https://codeload.github.com/TurboWarp/scratch-parser/tar.gz/fb65ba09d78ab6a0d19ce908d64b72d1a122312f"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

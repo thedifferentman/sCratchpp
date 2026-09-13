@@ -1,0 +1,19 @@
+{
+  "name": "Berkeley SoftFloat",
+  "version": "Release 3e",
+  "release_date": "2018-01-20",
+  "author": "John R. Hauser",
+  "official_page": "https://www.jhauser.us/arithmetic/SoftFloat.html",
+  "source_archive": "https://www.jhauser.us/arithmetic/SoftFloat-3e.zip",
+  "source_archive_sha256": "21130ce885d35c1fe73fc1e1bf2244178167e05c6747cad5f450cc991714c746",
+  "license": "BSD-3-Clause",
+  "license_file": "upstream/COPYING.txt",
+  "vendored_paths": [
+    "source/",
+    "COPYING.txt",
+    "build/Linux-x86_64-GCC/Makefile"
+  ],
+  "upstream_modifications": "None; the selected files are byte-for-byte contents of the pinned archive.",
+  "specialization": "8086-SSE (portable C NaN and integer-overflow policy only; no machine code or assembly)",
+  "build_inputs": "The build selects only binary32/binary64 operations and their portable integer primitives. platform.h does not include opts-GCC.h or enable native CLZ/int128 intrinsics."
+}

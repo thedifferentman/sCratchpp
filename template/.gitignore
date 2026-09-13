@@ -1,0 +1,11 @@
+/build/
+/toolchain.local.json
+__pycache__/
+*.py[cod]
+/.idea/
+/CMakeUserPresets.json
+*.log
+.DS_Store
+Thumbs.db
+
+# Keep .vscode/tasks.json, launch.json and the shared editor configuration.

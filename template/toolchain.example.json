@@ -1,0 +1,4 @@
+{
+    "clang": "clang++",
+    "scratch_llvm": "scratch-llvm"
+}

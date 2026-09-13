@@ -1,0 +1,27 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Scratch: Build .sb3",
+            "type": "process",
+            "command": "python3",
+            "windows": { "command": "python" },
+            "args": ["${workspaceFolder}/build.py"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": ["$gcc"],
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+        },
+        {
+            "label": "Scratch: Debug",
+            "type": "process",
+            "command": "python3",
+            "windows": { "command": "python" },
+            "args": ["${workspaceFolder}/build.py", "--debug"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": ["$gcc"],
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+        }
+    ]
+}

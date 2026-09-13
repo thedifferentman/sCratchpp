@@ -1,0 +1,109 @@
+{
+  "description": "Pinned LLVM 22.1.8 apt.llvm.org packages for Ubuntu 24.04 x86_64; extracted without installation.",
+  "llvm_version": "22.1.8",
+  "index_url": "https://apt.llvm.org/noble/dists/llvm-toolchain-noble-22/main/binary-amd64/Packages.gz",
+  "packages": [
+    {
+      "name": "clang-22",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/clang-22_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "e969e7f97a6e71326bae2cec6d76059cb9bf6562bfe89d03bcb65c3cee1aac05"
+    },
+    {
+      "name": "libc++-22-dev",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/libc++-22-dev_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "6016d2b88dc6d848bed80a14c88a076c295a0b301c4c996c5cf113a826cd6864"
+    },
+    {
+      "name": "libc++1",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/libc++1_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "ac21eec78fce03d0e1487279e0cd4a42ca91a0ff225c39650b48307e1efc6733"
+    },
+    {
+      "name": "libc++abi-22-dev",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/libc++abi-22-dev_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "1a497f93a66c49040f6265b0b653105a970538c8935d9223f2fe66845d157842"
+    },
+    {
+      "name": "libc++abi1",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/libc++abi1_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "dba163dcdcc580389fac4354d5d499d9ccc95f33dafc67c650db1d299330f5de"
+    },
+    {
+      "name": "libclang-common-22-dev",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/libclang-common-22-dev_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "90cee393eefbe1cb5bf463b7d4aea4ab5512d06525641e6836d21c4d7191944e"
+    },
+    {
+      "name": "libclang-cpp22",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/libclang-cpp22_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "620b7960fef6ca4647b813889d4f3ae3f8bd5de71c949550c98a6030427acb18"
+    },
+    {
+      "name": "libclang-rt-22-dev",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/libclang-rt-22-dev_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "5ec77bbfbdae76a6eda76ef9fff0cfd983d6b9c7ea72335a7fed9c99c423a7fb"
+    },
+    {
+      "name": "libclang1-22",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/libclang1-22_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "25ca957fa2054cc607218df0a5c01994416062abc76fe008327fb95420afc509"
+    },
+    {
+      "name": "libllvm22",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/libllvm22_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "e94d23161316c53ebe8c9e35038468e06a5e47dbdf207a3c54a22ab40e37cbb6"
+    },
+    {
+      "name": "libunwind-22-dev",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/libunwind-22-dev_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "26ca6a5aca7c205cd285dcbc5094810ff84b76a42215de50846102076415b846"
+    },
+    {
+      "name": "lld-22",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/lld-22_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "4172d3b289825f729a84ae351b2f37a2c6c6715f2d1511edd60b59a79c3da200"
+    },
+    {
+      "name": "llvm-22",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/llvm-22_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "402a671415ac47810b4e581c06fa6e29110e51efae697647f7072e0528a1718e"
+    },
+    {
+      "name": "llvm-22-linker-tools",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/llvm-22-linker-tools_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "ee6df5de094e62ba016f6d8ade319d34c246a0a5c79ed898aeaaa327332cd5b7"
+    },
+    {
+      "name": "llvm-22-runtime",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/llvm-22-runtime_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "ad7496a6588074f8e81123387962f3da07107a87243038c9ea577f11306ef2dc"
+    },
+    {
+      "name": "llvm-libunwind1",
+      "version": "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80",
+      "url": "https://apt.llvm.org/noble/pool/main/l/llvm-toolchain-22/llvm-libunwind1_22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80_amd64.deb",
+      "sha256": "ecabd8f3a7083eac8bb42bf6c55ce012bf298a178c87bf491e599cbe21ba48c6"
+    }
+  ],
+  "node": {
+    "version": "22.22.0",
+    "url": "https://nodejs.org/dist/v22.22.0/node-v22.22.0-linux-x64.tar.xz",
+    "sha256": "9aa8e9d2298ab68c600bd6fb86a6c13bce11a4eca1ba9b39d79fa021755d7c37",
+    "checksums_url": "https://nodejs.org/dist/v22.22.0/SHASUMS256.txt"
+  }
+}

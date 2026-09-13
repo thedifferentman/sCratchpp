@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Scratch: Debug",
+            "type": "scratch-llvm",
+            "request": "launch",
+            "project": "${workspaceFolder}/build/debug/project.sb3",
+            "debugMap": "${workspaceFolder}/build/debug/project.debug.json",
+            "preLaunchTask": "Scratch: Debug",
+            "stopOnEntry": true
+        },
+        {
+            "name": "Scratch: Run in TurboWarp",
+            "type": "scratch-llvm",
+            "request": "launch",
+            "mode": "run",
+            "project": "${workspaceFolder}/build/project.sb3",
+            "preLaunchTask": "Scratch: Build .sb3"
+        }
+    ]
+}

@@ -1,0 +1,17 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "Scratch",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "compilerPath": "clang++",
+            "compilerArgs": [
+                "--target=x86_64-unknown-linux-gnu",
+                "-fno-exceptions", "-fno-rtti",
+                "-fno-stack-protector", "-nostdinc"
+            ],
+            "cppStandard": "c++17",
+            "includePath": ["${workspaceFolder}/include"]
+        }
+    ]
+}

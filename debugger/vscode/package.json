@@ -1,0 +1,37 @@
+{
+  "name": "debugger",
+  "displayName": "Scratch LLVM Debugger",
+  "description": "Run LLVM-to-Scratch projects in TurboWarp and debug their source with LLDB.",
+  "version": "0.1.1",
+  "publisher": "scratch-llvm",
+  "engines": {"vscode": "^1.85.0"},
+  "categories": ["Debuggers"],
+  "main": "./extension.cjs",
+  "activationEvents": ["onDebug"],
+  "contributes": {
+    "debuggers": [{
+      "type": "scratch-llvm",
+      "label": "Scratch LLVM / TurboWarp",
+      "languages": ["cpp", "c", "rust", "llvm"],
+      "configurationAttributes": {
+        "launch": {
+          "required": ["project"],
+          "properties": {
+            "mode": {"type": "string", "enum": ["debug", "run"], "default": "debug", "description": "Debug with LLDB, or directly run in TurboWarp without starting LLDB."},
+            "project": {"type": "string", "description": "Absolute path to the compiled SB3."},
+            "debugMap": {"type": "string", "description": "Compiler debug map matching project.sb3."},
+            "turbowarp": {"type": "string", "description": "Optional TurboWarp Desktop executable for Run Without Debugging. Debug uses the browser interpreter."},
+            "turbowarpUrl": {"type": "string", "default": "https://turbowarp.org/editor", "description": "TurboWarp editor URL; no particular version is required."},
+            "stopOnEntry": {"type": "boolean", "default": true},
+            "node": {"type": "string", "description": "Optional Node.js executable. Defaults to the VS Code host runtime."},
+            "lldbDap": {"type": "string", "description": "Path to lldb-dap, or lldb-vscode on older installations."},
+            "clang": {"type": "string", "description": "Clang used to assemble the virtual target's DWARF symbols. Defaults to toolchain.local.json or PATH."},
+            "lldbPython": {"type": "string", "description": "Optional directory containing the Python runtime required by this LLDB build (Windows)."},
+            "connectTimeout": {"type": "number", "default": 120000, "description": "Milliseconds allowed for TurboWarp and the local extension to connect."}
+          }
+        }
+      },
+      "initialConfigurations": [{"type": "scratch-llvm", "request": "launch", "name": "Debug Scratch", "project": "${workspaceFolder}/build/debug/project.sb3", "debugMap": "${workspaceFolder}/build/debug/project.debug.json", "preLaunchTask": "Scratch: Debug"}]
+    }]
+  }
+}

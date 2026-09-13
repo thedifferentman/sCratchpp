@@ -1,0 +1,11 @@
+{
+  "upstream": "https://github.com/llvm/llvm-project",
+  "tag": "llvmorg-22.1.8",
+  "headers_archive": {
+    "url": "https://repo.msys2.org/mingw/clang64/mingw-w64-clang-x86_64-libc++-22.1.8-1-any.pkg.tar.zst",
+    "sha256": "de0bd1b9d62f81b6ac06ea915af8da3fbd63e6705e1bb62ef3f553d1e5fbe4ef"
+  },
+  "sources_base": "https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-22.1.8/libcxx/",
+  "local_configuration": "include/__config_site",
+  "note": "Installed upstream headers extracted from verified MSYS2 libc++ package; target __config_site replaced with Scratch configuration. No host SDK required to consume these headers."
+}

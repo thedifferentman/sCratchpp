@@ -1,0 +1,79 @@
+# Build, test and release output (keep vendored source/build directories).
+/build/
+/cmake-build-*/
+/out/
+/dist/
+/debugger/dist/
+/tests/.tmp/
+/template/build/
+
+# Local CMake/Ninja state. CMakePresets.json remains tracked.
+CMakeFiles/
+CMakeCache.txt
+CMakeUserPresets.json
+cmake_install.cmake
+CTestTestfile.cmake
+build.ninja
+.ninja_deps
+.ninja_log
+compile_commands.json
+
+# Compiled binaries, LLVM bitcode and generated Scratch/extension packages.
+# Keep textual LLVM IR fixtures (*.ll) and all source/header files.
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.pch
+*.gch
+*.bc
+*.elf
+*.sb3
+*.vsix
+
+# Reinstallable dependencies and language/tool caches; keep lock files.
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+.cache/
+
+# Machine-specific IDE and toolchain settings.
+# template/.vscode/ is shared project-template source and MUST be retained.
+.idea/
+/.vscode/
+*.iml
+toolchain.local.json
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Benchmark projects are reproduced by benchmark/generate_*.py.
+/benchmark/*.project.json
+/benchmark/arith-byte.txt
+/benchmark/arith-num.txt
+/benchmark/bytes.txt
+/benchmark/compact.txt
+
+# Logs, editor backups and OS metadata.
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini

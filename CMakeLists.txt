@@ -1,0 +1,155 @@
+cmake_minimum_required(VERSION 3.24)
+include(cmake/ClangDefaults.cmake)
+project(s_C_ratch__ VERSION 0.1.0 LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+include(GNUInstallDirs)
+include(cmake/HostToolchain.cmake)
+include(cmake/LLVMCApi.cmake)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+if(APPLE)
+  set(CMAKE_INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
+elseif(UNIX)
+  set(CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+endif()
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+file(RELATIVE_PATH _scratch_runtime_relative "${CMAKE_INSTALL_FULL_BINDIR}" "${CMAKE_INSTALL_FULL_DATADIR}/scratch-llvm")
+
+add_library(scratch-platform STATIC src/platform.cpp)
+target_include_directories(scratch-platform PUBLIC include)
+target_compile_definitions(scratch-platform PUBLIC "SCRATCH_INSTALL_RUNTIME_RELATIVE_DIR=\"${_scratch_runtime_relative}\"")
+target_link_libraries(scratch-platform PUBLIC scratch-host)
+if(WIN32)
+  target_link_libraries(scratch-platform PUBLIC shell32)
+endif()
+add_library(scratch-core STATIC src/frontend.cpp src/blocks.cpp src/numeric.cpp src/slot_memory.cpp src/slot_numeric.cpp src/constants.cpp src/backend.cpp src/prune.cpp src/float_lower.cpp src/assembly.cpp)
+target_include_directories(scratch-core PUBLIC include)
+target_include_directories(scratch-core SYSTEM PUBLIC third_party/nlohmann/include)
+target_link_libraries(scratch-core PUBLIC scratch-host scratch-llvm-c)
+add_executable(scratch-llvm main.cpp)
+target_link_libraries(scratch-llvm PRIVATE scratch-core scratch-platform)
+
+# The guest bitcode target is independent of the compiler executable's host.
+set(SCRATCH_CLANG_EXECUTABLE "$ENV{SCRATCH_CLANG}" CACHE FILEPATH "Clang 22 used to compile the guest floating-point runtime")
+if(NOT SCRATCH_CLANG_EXECUTABLE)
+  find_program(_scratch_runtime_clang NAMES clang-22 clang HINTS "${LLVM_ROOT}/bin" "${SCRATCH_TOOLCHAIN_ROOT}/bin" REQUIRED)
+  set(SCRATCH_CLANG_EXECUTABLE "${_scratch_runtime_clang}" CACHE FILEPATH "Clang 22 for guest runtime" FORCE)
+endif()
+option(SCRATCH_BUILD_FLOAT_RUNTIME "Build the vendored exact guest floating-point runtime" ON)
+if(SCRATCH_BUILD_FLOAT_RUNTIME)
+  file(GLOB_RECURSE FLOAT_RUNTIME_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/runtime/softfloat/*")
+  set(FLOAT_RUNTIME_BC "${PROJECT_BINARY_DIR}/runtime/scratch-float.bc")
+  add_custom_command(OUTPUT "${FLOAT_RUNTIME_BC}" "${PROJECT_BINARY_DIR}/runtime/SoftFloat-LICENSE.txt"
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/build_float_runtime.py"
+      --clang "${SCRATCH_CLANG_EXECUTABLE}" --llvm-library "${LLVM_C_RUNTIME}" --output-dir "${PROJECT_BINARY_DIR}/runtime"
+    DEPENDS tools/build_float_runtime.py tools/toolchain.py ${FLOAT_RUNTIME_SOURCES}
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+  add_custom_target(scratch-float-runtime DEPENDS "${FLOAT_RUNTIME_BC}")
+  add_dependencies(scratch-llvm scratch-float-runtime)
+  add_custom_command(TARGET scratch-llvm POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${FLOAT_RUNTIME_BC}" "$<TARGET_FILE_DIR:scratch-llvm>"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_BINARY_DIR}/runtime/SoftFloat-LICENSE.txt" "$<TARGET_FILE_DIR:scratch-llvm>" VERBATIM)
+  install(FILES "${FLOAT_RUNTIME_BC}" "${PROJECT_BINARY_DIR}/runtime/SoftFloat-LICENSE.txt" DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm")
+endif()
+
+option(SCRATCH_BUILD_STDLIB "Build the no-exceptions guest libc++ SDK" ON)
+set(SCRATCH_HEAP_BYTES 16384 CACHE STRING "Guest C/C++ allocator arena size in bytes")
+if(SCRATCH_BUILD_STDLIB)
+  file(GLOB_RECURSE STDLIB_SOURCES CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/runtime/stdlib/*" "${PROJECT_SOURCE_DIR}/third_party/libcxx/*")
+  set(STDLIB_DIRECTORY "${PROJECT_BINARY_DIR}/stdlib")
+  add_custom_command(OUTPUT "${STDLIB_DIRECTORY}/manifest.json"
+    BYPRODUCTS "${STDLIB_DIRECTORY}/lib/scratch-stdlib.bc"
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/build_stdlib.py"
+      --clang "${SCRATCH_CLANG_EXECUTABLE}" --output-dir "${STDLIB_DIRECTORY}" --heap-bytes "${SCRATCH_HEAP_BYTES}"
+    DEPENDS tools/build_stdlib.py ${STDLIB_SOURCES}
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+  add_custom_target(scratch-stdlib DEPENDS "${STDLIB_DIRECTORY}/manifest.json")
+  add_dependencies(scratch-llvm scratch-stdlib)
+  install(DIRECTORY "${STDLIB_DIRECTORY}/" DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/stdlib" PATTERN "objects" EXCLUDE)
+endif()
+
+if(WIN32)
+  find_program(SCRATCH_LLVM_READOBJ NAMES llvm-readobj-22 llvm-readobj HINTS "${LLVM_ROOT}/bin" "${SCRATCH_TOOLCHAIN_ROOT}/bin" REQUIRED)
+  get_filename_component(_llvm_runtime_directory "${LLVM_C_RUNTIME}" DIRECTORY)
+  get_filename_component(_clang_directory "${CMAKE_CXX_COMPILER}" DIRECTORY)
+  add_custom_command(TARGET scratch-llvm POST_BUILD
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/copy_runtime_dlls.py"
+      --binary "$<TARGET_FILE:scratch-llvm>" --readobj "${SCRATCH_LLVM_READOBJ}"
+      --search-dir "${_llvm_runtime_directory}" --search-dir "${_clang_directory}"
+      --destination "$<TARGET_FILE_DIR:scratch-llvm>" VERBATIM)
+  # Install files at this level only; do not reproduce the build directory tree.
+  install(CODE "file(GLOB _scratch_dlls \"$<TARGET_FILE_DIR:scratch-llvm>/*.dll\")\nif(_scratch_dlls)\n  file(INSTALL DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}\" TYPE FILE FILES \${_scratch_dlls})\nendif()")
+endif()
+install(TARGETS scratch-llvm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(FILES README.md DESIGN.md DESTINATION "${CMAKE_INSTALL_DOCDIR}")
+install(FILES third_party/llvm/LICENSE.txt DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/licenses" RENAME LLVM.txt)
+install(FILES third_party/nlohmann/LICENSE.txt DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/licenses" RENAME nlohmann-json.txt)
+install(DIRECTORY debugger/ DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/debugger"
+  PATTERN "dist" EXCLUDE PATTERN "tests" EXCLUDE PATTERN "__pycache__" EXCLUDE)
+install(PROGRAMS tools/bootstrap_debugger.py DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/tools")
+
+include(CTest)
+if(BUILD_TESTING)
+  file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/test-output")
+  function(scratch_test name source)
+    add_executable(${name}-test "${source}")
+    target_link_libraries(${name}-test PRIVATE scratch-core scratch-platform)
+    add_dependencies(${name}-test scratch-llvm)
+  endfunction()
+  foreach(name IN ITEMS blocks prune assembly)
+    scratch_test(${name} tests/${name}_test.cpp)
+  endforeach()
+  scratch_test(numeric tests/numeric/numeric_test.cpp)
+  scratch_test(shared-numeric tests/numeric/shared_numeric_test.cpp)
+  scratch_test(frontend-reachability tests/frontend_reachability_test.cpp)
+  scratch_test(frontend-debug tests/frontend_debug_test.cpp)
+  scratch_test(slot-runtime tests/slot_runtime_test.cpp)
+  scratch_test(constants tests/constants_test.cpp)
+  add_executable(platform-test tests/platform_test.cpp)
+  target_link_libraries(platform-test PRIVATE scratch-platform)
+  add_dependencies(platform-test scratch-llvm)
+  add_test(NAME blocks COMMAND blocks-test "${PROJECT_BINARY_DIR}/test-output")
+  add_test(NAME prune COMMAND prune-test)
+  add_test(NAME assembly COMMAND assembly-test "${PROJECT_BINARY_DIR}/test-output")
+  add_test(NAME numeric COMMAND numeric-test "${PROJECT_SOURCE_DIR}/tests/numeric/wide_cases.json" "${PROJECT_BINARY_DIR}/test-output/numeric.sb3")
+  add_test(NAME shared-numeric COMMAND shared-numeric-test "${PROJECT_BINARY_DIR}/test-output/shared-numeric.sb3")
+  add_test(NAME frontend-reachability COMMAND frontend-reachability-test "${PROJECT_BINARY_DIR}/test-output/frontend")
+  add_test(NAME frontend-debug COMMAND frontend-debug-test "${PROJECT_BINARY_DIR}/test-output/frontend-debug")
+  add_test(NAME template-build COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/template_build_test.py")
+  add_test(NAME debug-map COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/debug_map_test.py"
+    --compiler "$<TARGET_FILE:scratch-llvm>" --clang "${SCRATCH_CLANG_EXECUTABLE}"
+    --output-dir "${PROJECT_BINARY_DIR}/test-output/debugger")
+  add_test(NAME slot-runtime COMMAND slot-runtime-test "${PROJECT_BINARY_DIR}/test-output/slot-runtime")
+  add_test(NAME constants COMMAND constants-test)
+  add_test(NAME platform COMMAND platform-test "$<TARGET_FILE:platform-test>" "${PROJECT_BINARY_DIR}/test-output/platform" "é 中文 \"quoted\"")
+  add_test(NAME toolchain-python COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s tests -p test_toolchain.py)
+  set_tests_properties(toolchain-python PROPERTIES WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+  set_tests_properties(numeric shared-numeric PROPERTIES TIMEOUT 300)
+  find_program(NODE_EXECUTABLE NAMES node)
+  if(NODE_EXECUTABLE)
+    add_test(NAME compiler-path COMMAND "${NODE_EXECUTABLE}" --test "${PROJECT_SOURCE_DIR}/tests/compiler_path.test.cjs")
+  endif()
+  if(NODE_EXECUTABLE AND EXISTS "${PROJECT_SOURCE_DIR}/tests/node_modules/scratch-vm")
+    add_test(NAME debug-engine COMMAND "${NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/debug_engine.test.cjs")
+    add_test(NAME debug-project COMMAND "${NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/debug_engine_project.test.cjs"
+      "${PROJECT_BINARY_DIR}/test-output/debugger")
+    set_tests_properties(debug-project PROPERTIES DEPENDS debug-map)
+    add_test(NAME debug-transport COMMAND "${NODE_EXECUTABLE}" --test "${PROJECT_SOURCE_DIR}/debugger/tests/transport.test.cjs")
+    add_test(NAME debug-rsp-status COMMAND "${NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/debugger/tests/rsp_status.test.cjs")
+    add_test(NAME slot-runtime-vm COMMAND "${NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/slot_runtime_vm.cjs" "${PROJECT_BINARY_DIR}/test-output/slot-runtime" "$<TARGET_FILE:scratch-llvm>")
+    set_tests_properties(slot-runtime-vm PROPERTIES DEPENDS slot-runtime TIMEOUT 300 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RUN_SERIAL TRUE)
+    if(SCRATCH_BUILD_STDLIB)
+      add_test(NAME stdlib COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/stdlib_test.py"
+        --compiler "$<TARGET_FILE:scratch-llvm>" --clang "${SCRATCH_CLANG_EXECUTABLE}"
+        --sdk "${STDLIB_DIRECTORY}" --node "${NODE_EXECUTABLE}" --timeout 180000 --output-dir "${PROJECT_BINARY_DIR}/test-output/stdlib")
+      set_tests_properties(stdlib PROPERTIES TIMEOUT 3600 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RUN_SERIAL TRUE)
+    endif()
+    add_test(NAME e2e COMMAND "${NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/e2e.cjs" --compiler "$<TARGET_FILE:scratch-llvm>" --output-dir "${PROJECT_BINARY_DIR}/test-output/e2e" --vm both --timeout 60000)
+    set_tests_properties(e2e PROPERTIES TIMEOUT 1200 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RUN_SERIAL TRUE)
+    add_test(NAME assembly-vm COMMAND "${NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/assembly_vm.cjs" "${PROJECT_BINARY_DIR}/test-output")
+    set_tests_properties(assembly-vm PROPERTIES DEPENDS assembly TIMEOUT 120 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+  endif()
+endif()

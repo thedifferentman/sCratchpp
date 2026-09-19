@@ -1,0 +1,23 @@
+# Portable scripts and ordinary source files use LF on every host.
+* text=auto eol=lf
+*.cmd text eol=crlf
+
+# These files are byte-pinned or published package inputs. Preserve their
+# original bytes (some upstream sources deliberately contain CRLF).
+/runtime/softfloat/** -text
+/third_party/libcxx/** -text
+/third_party/llvm-libc/** -text
+/third_party/musl/** -text
+/include/console/** -text
+/include/events/** -text
+/include/pte/** -text
+/include/triangle/** -text
+/debugger/player/vendor/** -text
+/website/dist/** -text
+
+# Lock files fingerprint manifest bytes, including line endings.
+sCrpp.toml -text
+*.zip -text
+*.png -text
+*.jpg -text
+*.ico -text

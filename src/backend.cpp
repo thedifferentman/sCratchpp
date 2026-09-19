@@ -302,6 +302,8 @@ class Compiler {
             }else if(aliases.count(name)) {
                 if(!seen.insert(name).second)error("cyclic alias '"+name+"'");
                 bytes=constant_value(aliases.at(name),&seen);bytes.resize(n,0);seen.erase(name);
+            }else if(name=="__scrpp_io_read" || name=="__scrpp_io_write") {
+                error("standard I/O terminal adapter is missing; link console >= 0.2.0 with SDK ABI 2 (or provide "+name+")");
             }else error("unresolved symbol '"+name+"'");
             const auto offset=symbol.value("addend",int64_t(0));unsigned carry=0;
             for(unsigned i=0;i<n;++i) {
@@ -497,6 +499,8 @@ class Compiler {
         const auto& ops=i.at("operands");
         if(varargs_intrinsic(i,name,out))return true;
         if(starts(name,"llvm.lifetime.") || starts(name,"llvm.dbg.") || starts(name,"llvm.assume"))return true;
+        if(starts(name,"llvm.invariant.start.")){store_result(i,zeros(size_of(i.at("type"))),out);return true;}
+        if(starts(name,"llvm.invariant.end."))return true;
         if(starts(name,"llvm.expect.")){store_result(i,value(ops.at(0),out),out);return true;}
         if(starts(name,"llvm.trap") || starts(name,"llvm.debugtrap")){extend(out,trap(name));return true;}
         if(starts(name,"llvm.stacksave")){store_result(i,from_small(var(SP),size_of(i.at("type"))),out);return true;}
@@ -542,8 +546,54 @@ class Compiler {
             if(loading)store_result(i,result,out);
             return true;
         }
+        if(starts(name,"llvm.ucmp.") || starts(name,"llvm.scmp.")) {
+            // LLVM 22 three-way compares have independently overloaded input
+            // and result widths; -1/0/+1 are signed results even for ucmp.
+            // This path lives inside the existing cached slot instruction
+            // helper and reuses exact byte comparisons, never native numbers.
+            if(ops.size()!=2)error("three-way compare intrinsic requires two operands");
+            const auto& source=ops.at(0).at("type");
+            const auto& other=ops.at(1).at("type");
+            const auto& target=i.at("type");
+            const bool vector=source.value("kind","")=="vector";
+            const auto& input=vector?source.at("element"):source;
+            if(input.value("kind","")!="int" || source!=other ||
+               (vector?(target.value("kind","")!="vector" || target.value("count",0u)!=source.value("count",0u)):
+                       target.value("kind","")!="int"))
+                error("three-way compare intrinsic requires matching integer operands and scalar/vector result shape");
+            const auto& output=vector?target.at("element"):target;
+            if(output.value("kind","")!="int" || bits_of(output)<2)
+                error("three-way compare intrinsic result must be an integer of at least 2 bits");
+            const unsigned width=bits_of(input),result_width=bits_of(output),lanes=vector?source.at("count").get<unsigned>():1;
+            auto left=snapshot(value(ops.at(0),out),out),right=snapshot(value(ops.at(1),out),out);
+            Bytes packed=zeros(size_of(target));
+            for(unsigned lane=0;lane<lanes;++lane) {
+                auto a=vector?element(left,lane,width):left,b=vector?element(right,lane,width):right;
+                const auto less=save(accept(numeric.compare(starts(name,"llvm.scmp.")?"slt":"ult",width,a,b),out).at(0),out);
+                const auto greater=save(accept(numeric.compare(starts(name,"llvm.scmp.")?"sgt":"ugt",width,a,b),out).at(0),out);
+                Bytes result((result_width+7)/8,mul(less,255));
+                result[0]=add(result[0],greater);
+                if(result_width%8)result.back()=mod(result.back(),1u<<(result_width%8));
+                if(vector)pack(packed,result,lane*result_width,result_width);
+                else packed=std::move(result);
+            }
+            store_result(i,packed,out);return true;
+        }
         if(starts(name,"llvm.")) {
             std::vector<Bytes> args;for(const auto& a:ops)args.push_back(value(a,out));
+            if(starts(name,"llvm.experimental.cttz.elts.")) {
+                if(ops.size()!=2 || ops.at(0).at("type").value("kind","")!="vector" ||
+                   i.at("type").value("kind","")!="int")error("unsupported cttz.elts signature");
+                const auto& source=ops.at(0).at("type");
+                unsigned count=source.at("count"),width=bits_of(source.at("element"));
+                const auto index=save(Expr(count),out);
+                for(unsigned lane=count;lane-- >0;) {
+                    auto nonzero=accept(numeric.compare("ne",width,element(args[0],lane,width),zeros((width+7)/8)),out).at(0);
+                    out.push_back(iff(nonzero,{set(index.at("fields").at("VARIABLE").at(0),lane)}));
+                }
+                out.push_back(iff(land(args[1].at(0),eq(index,count)),trap("cttz.elts zero poison")));
+                store_result(i,from_small(index,size_of(i.at("type"))),out);return true;
+            }
             if(starts(name,"llvm.vector.reduce.")) {
                 if(ops.empty() || ops.at(0).at("type").value("kind","")!="vector")error("unsupported reduction signature");
                 const auto& source=ops.at(0).at("type");unsigned count=source.at("count"),width=bits_of(source.at("element"));
@@ -560,7 +610,7 @@ class Compiler {
                 const auto& source=ops.at(0).at("type");unsigned count=source.at("count"),width=bits_of(source.at("element"));
                 const auto& result_type=i.at("type");bool tuple=result_type.value("kind","")=="struct";
                 const auto& vector_type=tuple?result_type.at("fields").at(0):result_type;
-                if(vector_type.value("kind","")!="vector")error("unsupported vector intrinsic result shape");
+                if(vector_type.value("kind","")!="vector")error("unsupported vector intrinsic result shape: "+name);
                 unsigned result_width=bits_of(vector_type.at("element"));Bytes packed=zeros(size_of(vector_type));
                 Bytes flags=tuple?zeros(size_of(result_type.at("fields").at(1))):Bytes{};
                 for(unsigned lane=0;lane<count;++lane) {
@@ -595,6 +645,8 @@ class Compiler {
         std::string name=callee.value("kind","")=="symbol"?callee.value("name",""):"";
         if(!building_runtime && starts(name,"llvm.")) {
             if(starts(name,"llvm.lifetime.") || starts(name,"llvm.dbg.") || starts(name,"llvm.assume"))return;
+            if(starts(name,"llvm.invariant.start.")){store_result(i,zeros(size_of(i.at("type"))),out);return;}
+            if(starts(name,"llvm.invariant.end."))return;
             if(starts(name,"llvm.trap") || starts(name,"llvm.debugtrap")){extend(out,trap(name));return;}
             if(starts(name,"llvm.memcpy") || starts(name,"llvm.memmove")) {
                 auto d=operand_slot(args.at(0),out),s=operand_slot(args.at(1),out),n=operand_slot(args.at(2),out);

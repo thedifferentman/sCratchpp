@@ -34,8 +34,8 @@ ldiv_t ldiv(long, long);
 lldiv_t lldiv(long long, long long);
 void *bsearch(const void *, const void *, size_t, size_t, int (*)(const void *, const void *));
 void qsort(void *, size_t, size_t, int (*)(const void *, const void *));
-/* Conversion and environment entry points are declared for libc++ headers.
-   Their implementation is outside the first-batch runtime. */
+/* Narrow numeric conversions are implemented for the fixed C locale.
+   Environment/random/multibyte APIs below remain outside this runtime. */
 int atoi(const char *);
 long atol(const char *);
 long long atoll(const char *);

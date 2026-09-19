@@ -19,8 +19,9 @@ def main():
  <Installation><InstallationTarget Id="Microsoft.VisualStudio.Code"/></Installation><Dependencies/>
  <Assets><Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true"/></Assets>
 </PackageManifest>'''
-    content_types = '''<?xml version="1.0" encoding="utf-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="json" ContentType="application/json"/><Default Extension="cjs" ContentType="application/javascript"/><Default Extension="js" ContentType="application/javascript"/><Default Extension="md" ContentType="text/markdown"/><Default Extension="vsixmanifest" ContentType="text/xml"/><Default Extension="py" ContentType="text/plain"/><Default Extension="txt" ContentType="text/plain"/></Types>'''
+    content_types = '''<?xml version="1.0" encoding="utf-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="html" ContentType="text/html"/><Default Extension="css" ContentType="text/css"/><Default Extension="json" ContentType="application/json"/><Default Extension="cjs" ContentType="application/javascript"/><Default Extension="js" ContentType="application/javascript"/><Default Extension="md" ContentType="text/markdown"/><Default Extension="vsixmanifest" ContentType="text/xml"/><Default Extension="py" ContentType="text/plain"/><Default Extension="txt" ContentType="text/plain"/></Types>'''
     required = ['scratch-debug.cjs', 'llvmdbg.cjs', 'websocket.cjs', 'engine.js']
+    required += ['player/index.html', 'player/player.js', 'player/player.css', 'player/pen-resolution.js', 'player/vendor/scaffolding-with-music.js']
     for name in required:
         if not (ROOT / name).is_file():
             raise SystemExit(f'Missing debugger runtime: {name}')
@@ -33,6 +34,9 @@ def main():
         for file in ROOT.iterdir():
             if file.is_file() and file.suffix in ('.cjs', '.js', '.py') and file.name != 'pack_extension.py':
                 archive.write(file, 'extension/runtime/' + file.name)
+        for file in (ROOT / 'player').rglob('*'):
+            if file.is_file():
+                archive.write(file, 'extension/runtime/player/' + file.relative_to(ROOT / 'player').as_posix())
         if (ROOT / 'README.md').exists():
             archive.write(ROOT / 'README.md', 'extension/README.md')
     print(output)

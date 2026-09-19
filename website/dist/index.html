@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="下载 sCr++ 的 Console、Events 与 PTE 包，查看依赖声明、版本和 SHA-256 校验值。">
+  <meta name="theme-color" content="#f5f9ff">
+  <title>scrate — sCr++ 包仓库</title>
+  <link rel="icon" type="image/svg+xml" href="./blue-c-icon.svg">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#packages">跳到包目录</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="./" aria-label="scrate 首页"><img class="brand-mark" src="./blue-c-icon.svg" width="48" height="48" alt="">scrate<span class="brand-caption">sCr++ 包仓库</span></a>
+      <nav aria-label="主导航"><a class="nav-current" href="#packages">包目录</a><a href="#usage">使用方式</a></nav>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page-heading">
+      <div><div class="eyebrow">sCr++ 包仓库</div><h1>下载 sCr++ 库</h1><p>直接下载库文件，或使用 scrate 管理依赖。</p></div>
+      <div class="registry-address"><span class="address-label">默认仓库</span><code>scrate.shapy.cn</code></div>
+    </div>
+
+    <div class="layout">
+      <section id="packages" aria-labelledby="packages-title">
+        <div class="section-heading"><h2 id="packages-title">包目录 <span class="count">4</span></h2><span>当前可下载版本</span></div>
+        <div class="package-list">
+          <article class="package" id="package-console">
+            <div class="package-top"><span class="package-icon console-icon" aria-hidden="true">&gt;_</span><div class="package-name"><h3>console</h3><span>控制台</span></div><span class="version">v0.3.0</span></div>
+            <p class="package-description">画笔控制台，支持文本输出、行输入与历史滚屏。支持 C++ iostream 与局部擦除光标，需要新版 SDK（ABI 2）。</p>
+            <div class="package-meta"><span>依赖 <a href="#package-events">events</a><span class="meta-comma">,</span> <a href="#package-pte">pte</a><span class="meta-comma">,</span> <a href="#package-triangle">triangle</a></span><span>源码包 · 13.0 KiB</span></div>
+            <div class="package-actions"><code id="dependency-console">console = "0.3.0"</code><button type="button" class="copy-button" data-copy-target="dependency-console" aria-label="复制 console 依赖声明"><span aria-hidden="true">⧉</span> 复制依赖</button><a class="download" href="./packages/console/0.3.0/console-0.3.0.zip" download="console-0.3.0.zip" aria-label="下载 console 0.3.0 ZIP 包"><span aria-hidden="true">↓</span> 下载 ZIP</a></div>
+            <details class="package-details"><summary>版本信息与校验</summary><div class="details-body"><div class="details-row"><span>版本索引</span><a href="./index/console/0.3.0.json">console / 0.3.0.json <span aria-hidden="true">↗</span></a></div><div class="hash-label"><span>SHA-256</span><button type="button" data-copy-target="hash-console" class="text-button" aria-label="复制 console SHA-256">复制校验值</button></div><code class="hash" id="hash-console">204896e22e0f6d6b2d376fff6a985b7eea3f4724a4b0fe09e934f3036f845036</code><p>依赖版本：events 0.1.0、pte 0.1.0、triangle 0.1.1。使用 scrate 安装时会自动解析这些包。</p></div></details>
+          </article>
+
+          <article class="package" id="package-events">
+            <div class="package-top"><span class="package-icon events-icon" aria-hidden="true">↯</span><div class="package-name"><h3>events</h3><span>事件处理</span></div><span class="version">v0.1.0</span></div>
+            <p class="package-description">键盘与滚轮事件队列，支持回调分派和定时刷新。事件在主执行上下文中统一处理。</p>
+            <div class="package-meta"><span>无包依赖</span><span>源码包 · 5.9 KiB</span></div>
+            <div class="package-actions"><code id="dependency-events">events = "0.1.0"</code><button type="button" class="copy-button" data-copy-target="dependency-events" aria-label="复制 events 依赖声明"><span aria-hidden="true">⧉</span> 复制依赖</button><a class="download" href="./packages/events/0.1.0/events-0.1.0.zip" download="events-0.1.0.zip" aria-label="下载 events 0.1.0 ZIP 包"><span aria-hidden="true">↓</span> 下载 ZIP</a></div>
+            <details class="package-details"><summary>版本信息与校验</summary><div class="details-body"><div class="details-row"><span>版本索引</span><a href="./index/events/0.1.0.json">events / 0.1.0.json <span aria-hidden="true">↗</span></a></div><div class="hash-label"><span>SHA-256</span><button type="button" data-copy-target="hash-events" class="text-button" aria-label="复制 events SHA-256">复制校验值</button></div><code class="hash" id="hash-events">52ab1dd0b47de29a0b1388db25e9310c7fe679c9c42eab141cd652354e1b1cd0</code><p>独立使用，不需要链接控制台或绘字包。</p></div></details>
+          </article>
+
+          <article class="package" id="package-pte">
+            <div class="package-top"><span class="package-icon pte-icon" aria-hidden="true">Aa</span><div class="package-name"><h3>pte</h3><span>画笔字库</span></div><span class="version">v0.1.0</span></div>
+            <p class="package-description">纯画笔字符绘制，包含 44,025 个字形。优先使用 Consolas 与微软雅黑，缺字由原字库补齐。</p>
+            <div class="package-meta"><span>无包依赖</span><span>源码与字库 · 2.60 MiB</span></div>
+            <div class="package-actions"><code id="dependency-pte">pte = "0.1.0"</code><button type="button" class="copy-button" data-copy-target="dependency-pte" aria-label="复制 pte 依赖声明"><span aria-hidden="true">⧉</span> 复制依赖</button><a class="download" href="./packages/pte/0.1.0/pte-0.1.0.zip" download="pte-0.1.0.zip" aria-label="下载 pte 0.1.0 ZIP 包"><span aria-hidden="true">↓</span> 下载 ZIP</a></div>
+            <details class="package-details"><summary>版本信息与校验</summary><div class="details-body"><div class="details-row"><span>版本索引</span><a href="./index/pte/0.1.0.json">pte / 0.1.0.json <span aria-hidden="true">↗</span></a></div><div class="hash-label"><span>SHA-256</span><button type="button" data-copy-target="hash-pte" class="text-button" aria-label="复制 pte SHA-256">复制校验值</button></div><code class="hash" id="hash-pte">f3d34ec9d0ecdb32816a37291536965ca5ebbf209b14037ccd3e8a31d257440a</code><p>包含字体与索引数据。字体来源、转换参数及说明见包内 resources/SOURCE.json。</p></div></details>
+          </article>
+
+          <article class="package" id="package-triangle">
+            <div class="package-top"><span class="package-icon" aria-hidden="true">△</span><div class="package-name"><h3>triangle</h3><span>画笔三角形</span></div><span class="version">v0.1.1</span></div>
+            <p class="package-description">C1 八层快速填充算法，支持整数与固定点坐标。可用两个三角形绘制矩形。</p>
+            <div class="package-meta"><span>无包依赖</span><span>源码包 · 3.8 KiB</span></div>
+            <div class="package-actions"><code id="dependency-triangle">triangle = "0.1.1"</code><button type="button" class="copy-button" data-copy-target="dependency-triangle">复制依赖</button><a class="download" href="./packages/triangle/0.1.1/triangle-0.1.1.zip" download="triangle-0.1.1.zip">↓ 下载 ZIP</a></div>
+            <details class="package-details"><summary>版本信息与校验</summary><div class="details-body"><div class="details-row"><span>版本索引</span><a href="./index/triangle/0.1.1.json">triangle / 0.1.1.json ↗</a></div><div class="hash-label"><span>SHA-256</span><button type="button" data-copy-target="hash-triangle" class="text-button">复制校验值</button></div><code class="hash" id="hash-triangle">0f4bc8b6b09c610c5edf2eb73f0f05736b0cc84bb6abce136dcbdf1f7d900a5e</code></div></details>
+          </article>
+        </div>
+      </section>
+
+      <aside class="usage" id="usage" aria-labelledby="usage-title">
+        <div class="usage-heading"><span class="tiny-terminal" aria-hidden="true">/</span><h2 id="usage-title">在项目中使用</h2></div>
+        <p class="usage-lead">已安装 scrate？添加依赖，即可开始。</p>
+        <div class="step"><span class="step-number">1</span><h3>修改项目清单</h3></div>
+        <p>在 <code>sCrpp.toml</code> 中添加：</p>
+        <div class="code-panel"><div class="code-header"><span>sCrpp.toml</span><button type="button" data-copy-target="install-config" aria-label="复制项目依赖配置">复制</button></div><pre id="install-config"><span class="code-section">[dependencies]</span>
+console = <span class="code-value">"0.3.0"</span></pre></div>
+        <div class="step"><span class="step-number">2</span><h3>安装并构建</h3></div>
+        <div class="code-panel commands"><button type="button" class="command-copy" data-copy-target="install-commands" aria-label="复制安装与构建命令">复制</button><pre id="install-commands">scrate install
+scrate build</pre></div>
+        <p class="usage-note">scrate 默认使用本站仓库，并自动获取传递依赖。项目应保留生成的 <code>scrate.lock</code>。</p>
+        <div class="manual-note"><h3>也可以直接下载</h3><p>ZIP 内含源码、头文件和清单。Console 需要 Events、PTE 与 Triangle；使用 scrate 安装可自动获取依赖。</p></div>
+      </aside>
+    </div>
+  </main>
+  <footer class="site-footer"><div><span class="footer-brand">scrate</span><span>面向 sCr++ 的包仓库</span></div><span>scrate.shapy.cn</span></footer>
+  <div id="feedback" class="feedback" role="status" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>

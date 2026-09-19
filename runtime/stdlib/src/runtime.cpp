@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <stdio.h>
 
 #ifndef SCRATCH_HEAP_BYTES
 #define SCRATCH_HEAP_BYTES 16384
@@ -12,11 +13,12 @@
 #define SCRATCH_ATEXIT_CAPACITY 128
 #endif
 namespace {
-constexpr size_t alignment = alignof(max_align_t);
-struct alignas(max_align_t) Block { size_t span, requested, payload; bool allocated; };
+constexpr size_t alignment = alignof(max_align_t) > __STDCPP_DEFAULT_NEW_ALIGNMENT__
+    ? alignof(max_align_t) : __STDCPP_DEFAULT_NEW_ALIGNMENT__;
+struct alignas(alignment) Block { size_t span, requested, payload; bool allocated; };
 static_assert(SCRATCH_HEAP_BYTES >= 128 && SCRATCH_HEAP_BYTES % alignment == 0,
               "SCRATCH_HEAP_BYTES must be aligned and at least 128");
-alignas(max_align_t) unsigned char heap[SCRATCH_HEAP_BYTES];
+alignas(alignment) unsigned char heap[SCRATCH_HEAP_BYTES];
 bool initialized;
 int error_number;
 bool power_two(size_t n) { return n && !(n & (n - 1)); }
@@ -311,7 +313,7 @@ void __cxa_guard_abort(uint64_t *guard) { reinterpret_cast<unsigned char *>(guar
             "r"((value >> 16) & 255u), "r"(value >> 24) : "memory");
     __builtin_unreachable();
 }
-[[noreturn]] void exit(int code) { __cxa_finalize(nullptr); _Exit(code); }
+[[noreturn]] void exit(int code) { __cxa_finalize(nullptr); fflush(nullptr); _Exit(code); }
 [[noreturn]] void quick_exit(int code) { while (quick_count) quick_handlers[--quick_count](); _Exit(code); }
 }
-__attribute__((destructor)) static void scratch_finalize() { __cxa_finalize(nullptr); }
+__attribute__((destructor)) static void scratch_finalize() { __cxa_finalize(nullptr); fflush(nullptr); }

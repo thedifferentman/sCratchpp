@@ -24,12 +24,21 @@ target_link_libraries(scratch-platform PUBLIC scratch-host)
 if(WIN32)
   target_link_libraries(scratch-platform PUBLIC shell32)
 endif()
-add_library(scratch-core STATIC src/frontend.cpp src/blocks.cpp src/numeric.cpp src/slot_memory.cpp src/slot_numeric.cpp src/constants.cpp src/backend.cpp src/prune.cpp src/float_lower.cpp src/assembly.cpp)
+add_library(scratch-core STATIC src/frontend.cpp src/blocks.cpp src/numeric.cpp src/slot_memory.cpp src/slot_numeric.cpp src/constants.cpp src/backend.cpp src/prune.cpp src/float_lower.cpp src/assembly.cpp src/resources.cpp)
 target_include_directories(scratch-core PUBLIC include)
 target_include_directories(scratch-core SYSTEM PUBLIC third_party/nlohmann/include)
 target_link_libraries(scratch-core PUBLIC scratch-host scratch-llvm-c)
 add_executable(scratch-llvm main.cpp)
 target_link_libraries(scratch-llvm PRIVATE scratch-core scratch-platform)
+add_custom_target(scratch-resource-tools
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SOURCE_DIR}/tools/build_resources.py" "${PROJECT_BINARY_DIR}/build_resources.py"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SOURCE_DIR}/tools/scrate.py" "${PROJECT_BINARY_DIR}/scrate.py"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SOURCE_DIR}/tools/scrate_build.py" "${PROJECT_BINARY_DIR}/scrate_build.py"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SOURCE_DIR}/tools/scrate_run.py" "${PROJECT_BINARY_DIR}/scrate_run.py"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SOURCE_DIR}/tools/scrate" "${PROJECT_BINARY_DIR}/scrate"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SOURCE_DIR}/tools/scrate.cmd" "${PROJECT_BINARY_DIR}/scrate.cmd"
+  DEPENDS tools/build_resources.py tools/scrate.py tools/scrate_build.py tools/scrate_run.py tools/scrate tools/scrate.cmd VERBATIM)
+add_dependencies(scratch-llvm scratch-resource-tools)
 
 # The guest bitcode target is independent of the compiler executable's host.
 set(SCRATCH_CLANG_EXECUTABLE "$ENV{SCRATCH_CLANG}" CACHE FILEPATH "Clang 22 used to compile the guest floating-point runtime")
@@ -54,17 +63,21 @@ if(SCRATCH_BUILD_FLOAT_RUNTIME)
   install(FILES "${FLOAT_RUNTIME_BC}" "${PROJECT_BINARY_DIR}/runtime/SoftFloat-LICENSE.txt" DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm")
 endif()
 
-option(SCRATCH_BUILD_STDLIB "Build the no-exceptions guest libc++ SDK" ON)
+option(SCRATCH_BUILD_STDLIB "Build the no-exceptions guest base C++ SDK" ON)
 set(SCRATCH_HEAP_BYTES 16384 CACHE STRING "Guest C/C++ allocator arena size in bytes")
 if(SCRATCH_BUILD_STDLIB)
+  if(Python3_VERSION VERSION_LESS 3.11)
+    message(FATAL_ERROR "The scrate toolchain requires Python 3.11 or newer")
+  endif()
   file(GLOB_RECURSE STDLIB_SOURCES CONFIGURE_DEPENDS
-    "${PROJECT_SOURCE_DIR}/runtime/stdlib/*" "${PROJECT_SOURCE_DIR}/third_party/libcxx/*")
+    "${PROJECT_SOURCE_DIR}/runtime/stdlib/*" "${PROJECT_SOURCE_DIR}/third_party/libcxx/*"
+    "${PROJECT_SOURCE_DIR}/third_party/llvm-libc/*" "${PROJECT_SOURCE_DIR}/third_party/musl/*")
   set(STDLIB_DIRECTORY "${PROJECT_BINARY_DIR}/stdlib")
   add_custom_command(OUTPUT "${STDLIB_DIRECTORY}/manifest.json"
     BYPRODUCTS "${STDLIB_DIRECTORY}/lib/scratch-stdlib.bc"
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/build_stdlib.py"
       --clang "${SCRATCH_CLANG_EXECUTABLE}" --output-dir "${STDLIB_DIRECTORY}" --heap-bytes "${SCRATCH_HEAP_BYTES}"
-    DEPENDS tools/build_stdlib.py ${STDLIB_SOURCES}
+    DEPENDS tools/build_stdlib.py tools/toolchain.py ${STDLIB_SOURCES}
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
   add_custom_target(scratch-stdlib DEPENDS "${STDLIB_DIRECTORY}/manifest.json")
   add_dependencies(scratch-llvm scratch-stdlib)
@@ -85,11 +98,25 @@ if(WIN32)
 endif()
 install(TARGETS scratch-llvm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES README.md DESIGN.md DESTINATION "${CMAKE_INSTALL_DOCDIR}")
+install(FILES LICENSE THIRD_PARTY_NOTICES.md DESTINATION "${CMAKE_INSTALL_DOCDIR}")
+install(FILES LICENSE THIRD_PARTY_NOTICES.md DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/licenses")
+install(DIRECTORY docs/ DESTINATION "${CMAKE_INSTALL_DOCDIR}/docs")
+install(DIRECTORY template/ DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/template"
+  PATTERN "build" EXCLUDE PATTERN ".scrate" EXCLUDE
+  PATTERN "toolchain.local.json" EXCLUDE PATTERN "__pycache__" EXCLUDE)
 install(FILES third_party/llvm/LICENSE.txt DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/licenses" RENAME LLVM.txt)
 install(FILES third_party/nlohmann/LICENSE.txt DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/licenses" RENAME nlohmann-json.txt)
 install(DIRECTORY debugger/ DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/debugger"
   PATTERN "dist" EXCLUDE PATTERN "tests" EXCLUDE PATTERN "__pycache__" EXCLUDE)
 install(PROGRAMS tools/bootstrap_debugger.py DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/tools")
+install(PROGRAMS tools/build_resources.py DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/tools")
+install(PROGRAMS tools/scrate.py tools/scrate_build.py tools/scrate_run.py DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/tools")
+install(PROGRAMS tools/scrate tools/scrate.py tools/scrate_build.py tools/scrate_run.py tools/build_resources.py DESTINATION "${CMAKE_INSTALL_BINDIR}")
+if(WIN32)
+  install(FILES tools/scrate.cmd DESTINATION "${CMAKE_INSTALL_BINDIR}")
+endif()
+install(DIRECTORY include/console include/events include/pte include/triangle
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/scratch-llvm/libraries")
 
 include(CTest)
 if(BUILD_TESTING)
@@ -106,6 +133,7 @@ if(BUILD_TESTING)
   scratch_test(shared-numeric tests/numeric/shared_numeric_test.cpp)
   scratch_test(frontend-reachability tests/frontend_reachability_test.cpp)
   scratch_test(frontend-debug tests/frontend_debug_test.cpp)
+  scratch_test(resources tests/resources_test.cpp)
   scratch_test(slot-runtime tests/slot_runtime_test.cpp)
   scratch_test(constants tests/constants_test.cpp)
   add_executable(platform-test tests/platform_test.cpp)
@@ -118,7 +146,11 @@ if(BUILD_TESTING)
   add_test(NAME shared-numeric COMMAND shared-numeric-test "${PROJECT_BINARY_DIR}/test-output/shared-numeric.sb3")
   add_test(NAME frontend-reachability COMMAND frontend-reachability-test "${PROJECT_BINARY_DIR}/test-output/frontend")
   add_test(NAME frontend-debug COMMAND frontend-debug-test "${PROJECT_BINARY_DIR}/test-output/frontend-debug")
+  add_test(NAME resources COMMAND resources-test)
+  add_test(NAME resource-pack COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/test_resources.py")
   add_test(NAME template-build COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/template_build_test.py")
+  add_test(NAME scrate COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/test_scrate.py")
+  add_test(NAME scrate-run COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/test_scrate_run.py")
   add_test(NAME debug-map COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/debug_map_test.py"
     --compiler "$<TARGET_FILE:scratch-llvm>" --clang "${SCRATCH_CLANG_EXECUTABLE}"
     --output-dir "${PROJECT_BINARY_DIR}/test-output/debugger")
@@ -131,21 +163,51 @@ if(BUILD_TESTING)
   find_program(NODE_EXECUTABLE NAMES node)
   if(NODE_EXECUTABLE)
     add_test(NAME compiler-path COMMAND "${NODE_EXECUTABLE}" --test "${PROJECT_SOURCE_DIR}/tests/compiler_path.test.cjs")
+    add_test(NAME player-loading COMMAND "${NODE_EXECUTABLE}" --test "${PROJECT_SOURCE_DIR}/debugger/tests/player_loading.test.cjs")
   endif()
   if(NODE_EXECUTABLE AND EXISTS "${PROJECT_SOURCE_DIR}/tests/node_modules/scratch-vm")
+    add_test(NAME turbowarp-settings COMMAND "${NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/turbowarp_settings.cjs" "$<TARGET_FILE:scratch-llvm>")
     add_test(NAME debug-engine COMMAND "${NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/debug_engine.test.cjs")
     add_test(NAME debug-project COMMAND "${NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/debug_engine_project.test.cjs"
       "${PROJECT_BINARY_DIR}/test-output/debugger")
     set_tests_properties(debug-project PROPERTIES DEPENDS debug-map)
     add_test(NAME debug-transport COMMAND "${NODE_EXECUTABLE}" --test "${PROJECT_SOURCE_DIR}/debugger/tests/transport.test.cjs")
     add_test(NAME debug-rsp-status COMMAND "${NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/debugger/tests/rsp_status.test.cjs")
+    add_test(NAME costume-ready COMMAND "${NODE_EXECUTABLE}" --test "${PROJECT_SOURCE_DIR}/debugger/tests/costume_ready.test.cjs")
+    add_test(NAME scrate-vscode COMMAND "${NODE_EXECUTABLE}" --test "${PROJECT_SOURCE_DIR}/debugger/tests/scrate_launcher.test.cjs")
+    add_test(NAME debug-cli COMMAND "${NODE_EXECUTABLE}" --test "${PROJECT_SOURCE_DIR}/debugger/tests/cli.test.cjs")
     add_test(NAME slot-runtime-vm COMMAND "${NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/slot_runtime_vm.cjs" "${PROJECT_BINARY_DIR}/test-output/slot-runtime" "$<TARGET_FILE:scratch-llvm>")
     set_tests_properties(slot-runtime-vm PROPERTIES DEPENDS slot-runtime TIMEOUT 300 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RUN_SERIAL TRUE)
     if(SCRATCH_BUILD_STDLIB)
+      add_test(NAME resource-pipeline COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/resource_pipeline_test.py"
+        --compiler "$<TARGET_FILE:scratch-llvm>" --clang "${SCRATCH_CLANG_EXECUTABLE}" --sdk "${STDLIB_DIRECTORY}"
+        --node "${NODE_EXECUTABLE}" --output-dir "${PROJECT_BINARY_DIR}/test-output/resource-pipeline")
+      add_test(NAME string-bridge COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/string_bridge_test.py"
+        --compiler "$<TARGET_FILE:scratch-llvm>" --clang "${SCRATCH_CLANG_EXECUTABLE}" --sdk "${STDLIB_DIRECTORY}"
+        --node "${NODE_EXECUTABLE}" --output-dir "${PROJECT_BINARY_DIR}/test-output/string-bridge")
+      set_tests_properties(resource-pipeline string-bridge PROPERTIES TIMEOUT 300 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RUN_SERIAL TRUE)
+      add_test(NAME scrate-pipeline COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/scrate_pipeline_test.py"
+        --compiler "$<TARGET_FILE:scratch-llvm>" --clang "${SCRATCH_CLANG_EXECUTABLE}" --sdk "${STDLIB_DIRECTORY}"
+        --node "${NODE_EXECUTABLE}" --output-dir "${PROJECT_BINARY_DIR}/test-output/scrate-pipeline")
+      set_tests_properties(scrate-pipeline PROPERTIES TIMEOUT 600 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RUN_SERIAL TRUE)
+      foreach(library IN ITEMS console_model console_input events pte)
+        add_test(NAME ${library}-library COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/${library}_test.py"
+          --compiler "$<TARGET_FILE:scratch-llvm>" --clang "${SCRATCH_CLANG_EXECUTABLE}" --sdk "${STDLIB_DIRECTORY}"
+          --node "${NODE_EXECUTABLE}" --output-dir "${PROJECT_BINARY_DIR}/test-output/${library}-library")
+        set_tests_properties(${library}-library PROPERTIES TIMEOUT 300 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RUN_SERIAL TRUE)
+      endforeach()
       add_test(NAME stdlib COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/stdlib_test.py"
         --compiler "$<TARGET_FILE:scratch-llvm>" --clang "${SCRATCH_CLANG_EXECUTABLE}"
         --sdk "${STDLIB_DIRECTORY}" --node "${NODE_EXECUTABLE}" --timeout 180000 --output-dir "${PROJECT_BINARY_DIR}/test-output/stdlib")
       set_tests_properties(stdlib PROPERTIES TIMEOUT 3600 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RUN_SERIAL TRUE)
+      add_test(NAME triangle-library COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/triangle_test.py"
+        --compiler "$<TARGET_FILE:scratch-llvm>" --clang "${SCRATCH_CLANG_EXECUTABLE}"
+        --sdk "${STDLIB_DIRECTORY}" --node "${NODE_EXECUTABLE}" --output-dir "${PROJECT_BINARY_DIR}/test-output/triangle")
+      set_tests_properties(triangle-library PROPERTIES TIMEOUT 180 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RUN_SERIAL TRUE)
+      add_test(NAME iostream COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/iostream_test.py"
+        --compiler "$<TARGET_FILE:scratch-llvm>" --clang "${SCRATCH_CLANG_EXECUTABLE}"
+        --sdk "${STDLIB_DIRECTORY}" --node "${NODE_EXECUTABLE}" --output-dir "${PROJECT_BINARY_DIR}/test-output/iostream")
+      set_tests_properties(iostream PROPERTIES TIMEOUT 1500 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RUN_SERIAL TRUE)
     endif()
     add_test(NAME e2e COMMAND "${NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/e2e.cjs" --compiler "$<TARGET_FILE:scratch-llvm>" --output-dir "${PROJECT_BINARY_DIR}/test-output/e2e" --vm both --timeout 60000)
     set_tests_properties(e2e PROPERTIES TIMEOUT 1200 WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RUN_SERIAL TRUE)

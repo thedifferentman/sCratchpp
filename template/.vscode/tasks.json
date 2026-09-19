@@ -4,9 +4,8 @@
         {
             "label": "Scratch: Build .sb3",
             "type": "process",
-            "command": "python3",
-            "windows": { "command": "python" },
-            "args": ["${workspaceFolder}/build.py"],
+            "command": "scrate",
+            "args": ["build"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": { "kind": "build", "isDefault": true },
             "problemMatcher": ["$gcc"],
@@ -15,9 +14,8 @@
         {
             "label": "Scratch: Debug",
             "type": "process",
-            "command": "python3",
-            "windows": { "command": "python" },
-            "args": ["${workspaceFolder}/build.py", "--debug"],
+            "command": "scrate",
+            "args": ["build", "--debug"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": "build",
             "problemMatcher": ["$gcc"],

@@ -1,0 +1,20 @@
+version = 1
+
+[package]
+name = "pte"
+version = "0.1.0"
+resource_namespace = "__scl_pte"
+
+[library]
+sources = ["pte.cpp"]
+include_dirs = ["include"]
+
+[[lists]]
+name = "font"
+file = "font.txt"
+readonly = true
+
+[[lists]]
+name = "index"
+file = "index.txt"
+readonly = true

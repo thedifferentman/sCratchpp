@@ -33,6 +33,7 @@ const std::map<std::string, Spec>& opcodes() {
         for (const auto name : {"operator_equals", "operator_lt", "operator_gt", "operator_and", "operator_or"})
             add(name, Shape::Boolean, {"OPERAND1", "OPERAND2"});
         add("operator_not", Shape::Boolean, {"OPERAND"});
+        add("argument_reporter_boolean", Shape::Boolean, {}, {"VALUE"});
         add("operator_random", Shape::Reporter, {"FROM", "TO"}, {}, {}, true);
         add("operator_join", Shape::Reporter, {"STRING1", "STRING2"});
         add("operator_letter_of", Shape::Reporter, {"LETTER", "STRING"});
@@ -79,6 +80,9 @@ const std::map<std::string, Spec>& opcodes() {
         add("looks_changeeffectby", Shape::Command, {"CHANGE"}, {"EFFECT"}, {}, true);
         add("looks_seteffectto", Shape::Command, {"VALUE"}, {"EFFECT"}, {}, true);
         add("looks_size", Shape::Reporter);
+        add("looks_switchcostumeto", Shape::Command, {"COSTUME"}, {}, {}, true);
+        add("looks_nextcostume", Shape::Command, {}, {}, {}, true);
+        add("looks_costumenumbername", Shape::Reporter, {}, {"NUMBER_NAME"});
         for (const auto name : {"sensing_timer", "sensing_dayssince2000", "sensing_mousex", "sensing_mousey",
                                 "sensing_loudness", "sensing_answer", "sensing_username"}) add(name, Shape::Reporter);
         add("sensing_mousedown", Shape::Boolean);
@@ -116,6 +120,37 @@ const Spec& specification(const std::string& opcode) {
 }
 bool contains(const std::vector<std::string>& names, const std::string& name) {
     return std::find(names.begin(), names.end(), name) != names.end();
+}
+// Scratch strings are UTF-16. Keep only valid Unicode scalar values in JSON:
+// astral representative characters provide the high/low surrogate code units
+// through operator_letter_of, without serializing any unpaired surrogate.
+Json unicode_table() {
+    const auto append_utf8 = [](std::string& result, unsigned cp) {
+        if (cp < 0x80) result += static_cast<char>(cp);
+        else if (cp < 0x800) {
+            result += static_cast<char>(0xc0 | (cp >> 6));
+            result += static_cast<char>(0x80 | (cp & 63));
+        } else if (cp < 0x10000) {
+            result += static_cast<char>(0xe0 | (cp >> 12));
+            result += static_cast<char>(0x80 | ((cp >> 6) & 63));
+            result += static_cast<char>(0x80 | (cp & 63));
+        } else {
+            result += static_cast<char>(0xf0 | (cp >> 18));
+            result += static_cast<char>(0x80 | ((cp >> 12) & 63));
+            result += static_cast<char>(0x80 | ((cp >> 6) & 63));
+            result += static_cast<char>(0x80 | (cp & 63));
+        }
+    };
+    std::string bmp, high, low;
+    // Vanilla scratch-parser removes U+0008 from every loaded JSON string.
+    // Exclude it deliberately so deserialization cannot shift this table.
+    for (unsigned cp = 0; cp < 0x10000; ++cp)
+        if (cp != 8 && (cp < 0xd800 || cp >= 0xe000)) append_utf8(bmp, cp);
+    for (unsigned i = 0; i < 1024; ++i) {
+        append_utf8(high, 0x10000 + (i << 10));
+        append_utf8(low, 0x10000 + i);
+    }
+    return Json::array({bmp, high, low});
 }
 std::string trim(std::string text) {
     const auto white = [](unsigned char c) { return std::isspace(c) != 0; };
@@ -289,7 +324,8 @@ void validate_structure(const Json& program, bool top_level) {
 }
 
 unsigned integer_bits(const Json& type, const std::string& context) {
-    if (type.value("kind", "") != "int") fail(context + " requires an integer r operand; float, pointer and aggregate bridges are not implemented");
+    if (type.value("kind", "") != "int")
+        fail(context + " requires an integer r operand (only results additionally support double); other float, pointer and aggregate bridges are not implemented");
     const auto bits = type.value("bits", 0u);
     if (bits == 0 || bits > 32) fail(context + " supports only i1 through i32");
     return bits;
@@ -332,9 +368,10 @@ public:
     std::vector<Expr> inputs;
     bool has_output;
     unsigned output_bits;
+    bool float_output;
     std::string output_name;
-    Lowerer(Project& project, bool output, unsigned bits, bool side_effects)
-        : has_output(output), output_bits(bits), project_(project), side_effects_(side_effects) {
+    Lowerer(Project& project, bool output, unsigned bits, bool side_effects, bool floating)
+        : has_output(output), output_bits(bits), float_output(floating), project_(project), side_effects_(side_effects) {
         for (std::size_t index = 0;; ++index) {
             prefix_ = "__scl_asm" + std::to_string(index) + "_";
             if (!project_.variables.contains(prefix_ + "value")) break;
@@ -378,6 +415,7 @@ public:
     }
     Bytes bridge_output() {
         if (!has_output) return {};
+        if (float_output) return bridge_double_output();
         // Convert Scratch's universal result once. Non-numeric strings and NaN
         // follow Scratch's numeric conversion to zero; infinities also map to zero.
         code.push_back(set(output_name, mul(var(output_name), 1)));
@@ -398,6 +436,52 @@ private:
     Project& project_;
     bool side_effects_;
     std::string prefix_;
+    Bytes bridge_double_output() {
+        // Scratch reporters hold binary64 already. Extract that representation
+        // using exact powers of two, without decimal conversion or SoftFloat.
+        // Inspect NaN before Scratch's arithmetic coercion maps it to zero.
+        const auto sign = prefix_ + "sign";
+        const auto exponent = prefix_ + "exponent";
+        const auto fraction = prefix_ + "fraction";
+        const auto value = var(output_name);
+        code.push_back(set(sign, 0));
+        code.push_back(set(exponent, 0));
+        code.push_back(set(fraction, 0));
+        Script finite{
+            set(output_name, mul(value, 1)),
+            iff(lor(lt(value, 0), eq(scratch::div(1, value), "-Infinity")),
+                {set(sign, 128), set(output_name, mul(value, -1))}),
+            iff(eq(value, "Infinity"), {set(exponent, 2047)}, {
+                iff(lnot(eq(value, 0)), {
+                    // Keep the unbiased exponent in the same register until
+                    // normalization finishes. At -1022 the value may be < 1:
+                    // that is precisely an IEEE subnormal significand.
+                    until(lor(lnot(lt(value, 1)), eq(var(exponent), -1022)),
+                        {set(output_name, mul(value, 2)), set(exponent, sub(var(exponent), 1))}),
+                    until(lt(value, 2),
+                        {set(output_name, scratch::div(value, 2)), set(exponent, add(var(exponent), 1))}),
+                    iff(lt(value, 1),
+                        {set(fraction, mul(value, 4503599627370496.0)), set(exponent, 0)},
+                        {set(fraction, mul(sub(value, 1), 4503599627370496.0)),
+                         set(exponent, add(var(exponent), 1023))})
+                })
+            })
+        };
+        code.push_back(iff(eq(value, "NaN"),
+            {set(exponent, 2047), set(fraction, 2251799813685248.0)}, std::move(finite)));
+        Bytes bytes;
+        for (unsigned i = 0; i < 8; ++i) {
+            const auto name = prefix_ + "byte" + std::to_string(i);
+            Expr byte;
+            if (i < 6) byte = mod(floor_(scratch::div(var(fraction), std::ldexp(1.0, i * 8))), 256);
+            else if (i == 6) byte = add(floor_(scratch::div(var(fraction), 281474976710656.0)),
+                                        mul(mod(var(exponent), 16), 16));
+            else byte = add(var(sign), floor_(scratch::div(var(exponent), 16)));
+            code.push_back(set(name, std::move(byte)));
+            bytes.push_back(var(name));
+        }
+        return bytes;
+    }
     Expr value(const Json& source, bool assigned) {
         const auto kind = source.at("kind").get<std::string>();
         if (kind == "literal") return source.at("value");
@@ -428,11 +512,18 @@ private:
                 if (text.empty() || text.find('\0') != std::string::npos) fail("variable/list name is empty or contains NUL");
                 if (text.rfind("__scl_asm", 0) == 0) fail("__scl_asm is reserved for assembly bridge temporaries");
                 auto& declarations = name == "VARIABLE" ? project_.variables : project_.lists;
-                if (!declarations.contains(text)) declarations[text] = name == "VARIABLE" ? Json(0) : Json::array();
+                if (text == "__scl_unicode") {
+                    if (name != "LIST") fail("__scl_unicode is reserved for the Unicode table");
+                    const auto opcode = operation.at("opcode").get<std::string>();
+                    if (spec.writes && opcode != "data_showlist" && opcode != "data_hidelist")
+                        fail("__scl_unicode is a read-only runtime table");
+                    if (!declarations.contains(text)) declarations[text] = unicode_table();
+                } else if (!declarations.contains(text)) declarations[text] = name == "VARIABLE" ? Json(0) : Json::array();
             } else {
                 static const std::map<std::string, std::set<std::string>> enums = {
                     {"OPERATOR", {"abs", "floor", "ceiling", "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "ln", "log", "e ^", "10 ^"}},
                     {"STYLE", {"left-right", "don't rotate", "all around"}},
+                    {"NUMBER_NAME", {"number", "name"}},
                     {"EFFECT", {"COLOR", "FISHEYE", "WHIRL", "PIXELATE", "MOSAIC", "BRIGHTNESS", "GHOST"}},
                     {"CURRENTMENU", {"YEAR", "MONTH", "DATE", "DAYOFWEEK", "HOUR", "MINUTE", "SECOND"}}};
                 const auto options = enums.find(name);
@@ -509,7 +600,8 @@ NumericResult emit_assembly(const Json& asm_info, const Json& return_type,
     const auto text = asm_info.at("template").get<std::string>();
     const auto constraints = asm_info.at("constraints").get<std::string>();
     const bool output = return_type.value("kind", "") != "void";
-    const auto bits = output ? integer_bits(return_type, "result") : 0;
+    const bool floating = return_type.value("kind", "") == "float" && return_type.value("bits", 0u) == 64;
+    const auto bits = floating ? 64u : output ? integer_bits(return_type, "result") : 0u;
     check_constraints(constraints, output, operands.size());
     if (trim(text).empty()) {
         if (output || !operands.empty()) fail("empty assembly must have no result or operands");
@@ -517,7 +609,7 @@ NumericResult emit_assembly(const Json& asm_info, const Json& return_type,
     }
     auto program = Parser(text).parse();
     validate_structure(program, true);
-    Lowerer lowerer(project, output, bits, asm_info.value("side_effects", false));
+    Lowerer lowerer(project, output, bits, asm_info.value("side_effects", false), floating);
     lowerer.bridge_inputs(arg_types, operands);
     lowerer.program(std::move(program));
     auto bytes = lowerer.bridge_output();

@@ -7,5 +7,11 @@
   },
   "sources_base": "https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-22.1.8/libcxx/",
   "local_configuration": "include/__config_site",
-  "note": "Installed upstream headers extracted from verified MSYS2 libc++ package; target __config_site replaced with Scratch configuration. No host SDK required to consume these headers."
+  "note": "Installed upstream headers extracted from verified MSYS2 libc++ package; target __config_site replaced with Scratch configuration. No host SDK required to consume these headers.",
+  "local_patches": {
+    "include/__config_site": "Enable classic locale and default rune table; narrow streams, no threads/exceptions/RTTI.",
+    "include/iostream": "Request stream initialization only from a translation unit including iostream.",
+    "src/iostream_init.h": "Remove unconditional SDK-wide stream constructor; header requests Init.",
+    "src/locale.cpp": "Install classic narrow collate/ctype/codecvt/numpunct/num_get/num_put facets; named C/POSIX uses shared classic facets. Unsupported region names terminate in no-exception configuration."
+  }
 }

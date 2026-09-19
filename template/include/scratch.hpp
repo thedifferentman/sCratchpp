@@ -1,23 +1,28 @@
 #pragma once
 
-// Integer arguments map to the current Scratch inline-assembly bridge.
+#include <string>
+
+// Definitions are generated in build/generated/scratch.cpp from sCrpp.toml.
+// Every operation acts on the single Program sprite.
 namespace scratch {
-inline void clear() { __asm__ volatile("pen_clear"); }
-inline void pen_up() { __asm__ volatile("pen_penUp"); }
-inline void pen_down() { __asm__ volatile("pen_penDown"); }
-inline void go_to(int x, int y) {
-    __asm__ volatile("motion_gotoxy X=%0 Y=%1" : : "r"(x), "r"(y));
-}
-inline void point_in_direction(int degrees) {
-    __asm__ volatile("motion_pointindirection DIRECTION=%0" : : "r"(degrees));
-}
-inline void move(int steps) {
-    __asm__ volatile("motion_movesteps STEPS=%0" : : "r"(steps));
-}
-inline void turn_right(int degrees) {
-    __asm__ volatile("motion_turnright DEGREES=%0" : : "r"(degrees));
-}
-inline void pen_size(int size) {
-    __asm__ volatile("pen_setPenSizeTo SIZE=%0" : : "r"(size));
-}
+// TurboWarp's compatible "is turbowarp?" reporter; false in original Scratch.
+bool is_turbowarp();
+void clear();
+void pen_up();
+void pen_down();
+void go_to(int x, int y);
+void point_in_direction(int degrees);
+void move(int steps);
+void turn_right(int degrees);
+void pen_size(int size);
+void show();
+void hide();
+void stamp();
+
+// Write UTF-8 text to the Scratch variable __scl_string (provided by the SDK).
+void set_string(const std::string& text);
+// Prefix the current project's package name, then switch the Program costume.
+void set_costume(const std::string& name);
+// Switch by full "package::name", including independently linked packages.
+void set_costume_qualified(const std::string& name);
 } // namespace scratch

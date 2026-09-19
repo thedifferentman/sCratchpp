@@ -1,6 +1,7 @@
 #pragma once
 #include "common.hpp"
 #include <map>
+#include <set>
 
 namespace scratch {
 Expr expr(const std::string& opcode, const Json& inputs = Json::object(), const Json& fields = Json::object());
@@ -30,8 +31,16 @@ public:
     // Extra SB3 members, e.g. licenses/SoftFloat.txt. Names use forward slashes;
     // values are UTF-8 text. These files are not runtime lists or project metadata.
     Json files = Json::object();
+    // Final costume metadata for the single Program sprite (after its blank
+    // default costume). Asset payloads are binary-safe, not JSON text values.
+    Json costumes = Json::array();
+    std::map<std::string, std::string> assets;
+    std::set<std::string> readonly_lists;
+    Json resource_events = Json::array();
     // Sidecar-only information. Never serialized as Scratch blocks or variables.
     Json debug_map = Json::object();
+    // Root-project TurboWarp preferences; serialized as a vanilla-compatible comment.
+    Json turbowarp_settings = Json::object();
     void procedure(const std::string& name, const std::vector<std::string>& params, Script body);
     void green_flag(Script body);
     Json build();

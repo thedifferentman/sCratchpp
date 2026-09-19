@@ -126,10 +126,11 @@ class LldbAdapter extends Adapter {
         let firstStopResolve, firstStopReject;
         const firstStop = new Promise((resolve, reject) => { firstStopResolve = resolve; firstStopReject = reject; });
         firstStop.catch(() => {});
+        this.abortLaunch = firstStopReject;
         this.bridge = new Bridge(a, message => {
             if (message.event === 'stopped') { firstStopResolve(message.body); this.rsp?.notifyStopped(message.body); }
             else if (message.event === 'terminated') { firstStopReject(new Error('Program exited before a source execution point')); this.rsp?.notifyExited(message.body); }
-            else if (message.event === 'output') this.event('output', message.body);
+            else if (message.event === 'output' || message.event === 'scrppPlayer') this.event(message.event, message.body);
         });
         try {
             const {generateSymbols} = require('./symbols.cjs');
@@ -143,6 +144,7 @@ class LldbAdapter extends Adapter {
             this.rsp = new RspServer({request: (method, ...args) => this.bridge.request(method, ...args), symbols: generated.symbols, map: this.bridge.map});
             this.rsp.on('fault', error => this.event('output', {category: 'stderr', output: `LLVM target: ${error.message}\n`}));
             const port = await this.rsp.listen(0);
+            if (this.cleaning) throw new Error('Debug session closed');
             await this.bridge.listen(); await this.bridge.ready;
             this.event('output', {category: 'console', output: 'TurboWarp connected; waiting for the first LLVM execution point.\n'});
             await this.bridge.request('start', {stopOnEntry: true, sourceEntry: true});
@@ -162,6 +164,7 @@ class LldbAdapter extends Adapter {
     }
     cleanup() {
         if (this.cleaning) return; this.cleaning = true;
+        this.abortLaunch?.(new Error('Debug session closed'));
         this.rsp?.close(); this.bridge?.close(); this.connection?.close();
     }
 }
@@ -176,7 +179,9 @@ function main(args = process.argv.slice(2)) {
             else throw new Error('Unknown adapter argument: ' + args[i]);
         }
         const adapter = new LldbAdapter(process.stdin, process.stdout, options);
-        process.once('SIGINT', () => adapter.cleanup()); process.once('SIGTERM', () => adapter.cleanup());
+        const stop = () => { adapter.cleanup(); process.stdin.pause(); process.stdin.unref?.(); };
+        process.once('SIGINT', stop); process.once('SIGTERM', stop);
+        if (process.platform === 'win32') process.once('SIGBREAK', stop);
         return;
     }
     if (args[0] === '--run' || args[0] === '--help') {

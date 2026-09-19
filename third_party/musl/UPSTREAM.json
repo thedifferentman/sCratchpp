@@ -1,0 +1,7 @@
+{
+  "version": "1.2.5",
+  "url": "https://git.musl-libc.org/cgit/musl/plain/src/stdio/vfprintf.c?h=v1.2.5",
+  "sha256": "5ae7748a197b3c334f2b6791f8613940f27d3bac6f27bcfa73706222fff4ffa8",
+  "license": "COPYRIGHT",
+  "usage": "fmt_fp and fmt_u adapted in runtime/stdlib/src/float_format.inc"
+}

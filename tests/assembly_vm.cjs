@@ -27,6 +27,13 @@ async function main() {
             for (const [name, value] of Object.entries(expected)) {
                 assert.equal(Number(result.variables[name]), value, `${vm}: ${name}`);
             }
+            const clock = Number(result.variables.case_f64_clock_native);
+            assert.ok(Number.isFinite(clock) && clock > 0, `${vm}: days_since_2000 is invalid`);
+            const bytes = Buffer.alloc(8);
+            bytes.writeDoubleLE(clock);
+            for (let i = 0; i < bytes.length; i++) {
+                assert.equal(Number(result.variables[`case_f64_clock_${i}`]), bytes[i], `${vm}: clock byte ${i}`);
+            }
         }
         return {vm, kind, passed: true, cases: kind === 'numeric' ? Object.keys(expected).length : 1,
             compiledThreads: result.compiledThreads, executionMs: result.executionMs,

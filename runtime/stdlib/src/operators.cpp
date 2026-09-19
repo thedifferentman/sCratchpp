@@ -46,6 +46,7 @@ int uncaught_exceptions() noexcept { return 0; }
 _LIBCPP_END_UNVERSIONED_NAMESPACE_STD
 
 _LIBCPP_BEGIN_NAMESPACE_STD
+[[noreturn]] void __throw_runtime_error(const char *) { std::terminate(); }
 [[noreturn]] void __libcpp_verbose_abort(const char *, ...) noexcept { std::terminate(); }
 _LIBCPP_END_NAMESPACE_STD
 

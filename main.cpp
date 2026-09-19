@@ -4,6 +4,7 @@
 #include "scratch/prune.hpp"
 #include "scratch/assembly.hpp"
 #include "scratch/platform.hpp"
+#include "scratch/resources.hpp"
 #include <fstream>
 #include <iostream>
 #include <filesystem>
@@ -11,17 +12,26 @@
 int run(const std::vector<std::string>& args) {
     try {
         std::vector<std::string> inputs;
+        std::vector<std::string> resource_units;
         std::string output = "out.sb3", dump, float_runtime, runtime_directory, debug_map;
         scratch::FrontendOptions frontend;
         frontend.entry_points = {"main"};
         frontend.asm_validator = scratch::validate_assembly_template;
         scratch::BackendOptions backend;
+        scratch::Json turbowarp_settings = scratch::Json::object();
         for (size_t i = 1; i < args.size(); ++i) {
             const std::string a = args[i];
             auto value = [&]() -> std::string { if (++i >= args.size()) throw scratch::Error("missing value for " + a); return args[i]; };
             if (a == "-o" || a == "--output") output = value();
             else if (a == "--dump-ir") dump = value();
             else if (a == "--debug-map") { debug_map=value();frontend.debug_info=true;backend.debug_info=true; }
+            else if (a == "--resources") resource_units.push_back(value());
+            else if (a == "--turbowarp-settings") {
+                const auto file=value();
+                std::ifstream stream(std::filesystem::u8path(file));
+                if(!stream)throw scratch::Error("cannot read TurboWarp settings: "+file);
+                stream>>turbowarp_settings;
+            }
             else if (a == "--passes") frontend.passes = value();
             else if (a == "--whole-program") frontend.whole_program = true;
             else if (a == "--data-layout") frontend.default_layout = value();
@@ -39,6 +49,8 @@ int run(const std::vector<std::string>& args) {
                 std::cout << "Usage: scratch-llvm input.ll [more.bc ...] -o project.sb3\n"
                              "  --dump-ir path.json   Write normalized, typed backend input\n"
                              "  --debug-map path.json Write source/IR/block mapping without adding Scratch blocks\n"
+                             "  --resources path.json Link a prepared resource unit (repeatable)\n"
+                             "  --turbowarp-settings path.json Override stored TurboWarp preferences\n"
                              "  --passes pipeline    LLVM pass pipeline (optional)\n"
                              "  --whole-program      Prune final-program exports, preserving required runtime entries\n"
                              "  --data-layout value  Explicit fallback for modules without layout\n"
@@ -73,6 +85,8 @@ int run(const std::vector<std::string>& args) {
         } else module = scratch::lower_floating(std::move(module));
         if (!dump.empty()) { std::ofstream f(std::filesystem::u8path(dump)); if (!f) throw scratch::Error("cannot write " + dump); f << module.dump(2) << '\n'; }
         auto project = scratch::compile(module, backend);
+        project.turbowarp_settings=turbowarp_settings;
+        scratch::link_resources(project,resource_units);
         if (!float_license.empty()) project.files["licenses/SoftFloat.txt"] = float_license;
         project.save(output);
         if(!debug_map.empty()) {

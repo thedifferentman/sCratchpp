@@ -1,6 +1,6 @@
 # Scratch LLVM 源码调试
 
-调试使用 **真正的 LLDB（`lldb-dap`）**，程序仍在 TurboWarp 的解释器中执行。无需 Debugger 插件，不修改 SB3 积木，也不固定 TurboWarp 版本；启动时检查所需接口，不兼容时给出错误。
+调试使用 **真正的 LLDB（`lldb-dap`）**，程序仍在 TurboWarp 的解释器中执行。无需 Debugger 插件，不修改 SB3 积木。VS Code 随扩展携带 TurboWarp Scaffolding 0.4.0；外部浏览器模式启动时检查所需接口，不兼容时给出错误。
 
 ```text
 VS Code ─ DAP ─ scratch-debug.cjs ─ DAP ─ lldb-dap
@@ -21,13 +21,13 @@ LLVM 调试信息描述源码和变量，编译器记录 IR 到积木的映射�
 1. 安装可用的 `lldb-dap`、Clang 和 `ld.lld`。可通过 `lldbDap`、`clang` 配置路径，也可使用 PATH。模板的 `toolchain.local.json` 中 `clang` 会被读取。
 2. Windows 的某些 LLDB 发行版还需要 Python 3.11。根目录运行 `python tools/bootstrap_debugger.py --prepare-python` 可明确下载并准备私有运行时；调试启动本身不联网安装依赖。也可配置 `lldbPython`，或在 `toolchain.local.json` 中设置 `lldb_python`。不修改系统环境变量。
 3. 根目录运行 `python debugger/pack_extension.py`。
-4. 在 VS Code 的扩展菜单选择“从 VSIX 安装”，选择 `debugger/dist/scratch-llvm-debugger-0.1.1.vsix`。
+4. 在 VS Code 的扩展菜单选择“从 VSIX 安装”，选择 `debugger/dist/scratch-llvm-debugger-0.1.8.vsix`。
 5. 打开 `template/`，选择 **Scratch: Debug** 并按 F5。预启动任务会生成 `build/debug/project.sb3` 和匹配的 `project.debug.json`。
-6. 浏览器打开 TurboWarp；首次运行时，根据浏览器/TW 提示允许加载本地扩展及访问 localhost。连接后会自动加载项目、关闭 TW 编译，并在入口停住。
+6. VS Code 内自动打开 sCr++ 舞台，无需在线编辑器或本地扩展授权。F5 关闭 TW 编译并在入口停住，Ctrl+F5 在同一舞台正常运行。
 
-默认桥接监听 `127.0.0.1:8000`。自动加载无沙箱扩展要求 URL 使用 `http://localhost:8000/`，因此首版同时只支持一个浏览器调试会话。如果端口已占用，结束占用它的服务或另一调试会话后重试。每次会话有随机 URL token，并检查浏览器 Origin；服务仅提供本次项目和调试资源。
+VS Code 内嵌模式使用 `127.0.0.1` 随机端口、会话 token 和 Origin 检查；仅提供本次项目及播放器资源。命令行旧浏览器启动仍使用端口 8000。
 
-直接运行请选择 **Scratch: Run in TurboWarp**。配置 `turbowarp` 为桌面版可执行文件时，直接传入 SB3；未配置时使用浏览器版，加载后正常运行。直接运行不需要 LLDB。
+直接运行请选择 **Scratch: Run in TurboWarp** 或按 Ctrl+F5，都会打开内嵌舞台，不需要 LLDB。命令行 scrate run 仍保留原有浏览器/桌面版入口。
 
 ```json
 {
@@ -41,9 +41,14 @@ LLVM 调试信息描述源码和变量，编译器记录 IR 到积木的映射�
 }
 ```
 
-可选配置包括 `lldbDap`、`lldbPython`、`clang`、`node`、`turbowarpUrl` 和 `connectTimeout`。Node 默认复用 VS Code 自带运行时，不需 npm 安装依赖。
+可选配置包括 `lldbDap`、`lldbPython`、`clang`、`node`、`scrate` 和 `connectTimeout`。Node 默认复用 VS Code 自带运行时，不需 npm 安装依赖。
 
 ## 首版范围
+
+也可以在项目目录运行 `scrate debug`：它先构建 Debug 产物，再提供真正使用 LLDB 的终端界面。
+用 `help` 查看断点、单步、调用栈、局部变量和只读表达式命令；`quit`、EOF、Ctrl+C 均会清理会话。
+`scrate run` 构建后直接启动 TurboWarp。`--no-build` 可跳过构建，`--no-open` 可手动连接浏览器。
+模板 F5 由扩展直接调用已安装的 `scrate debug --dap --no-build`，不读取项目启动脚本。需要 scrate 在 PATH 中，或在 launch.json 用 `scrate` 指定其可执行文件路径。
 
 - 源码断点可以运行时增加、删除；收到设置后下一次执行到该位置生效。
 - 暂停、继续、源码进入/跳过/跳出，以及函数调用栈由 LLDB 与 IR 目标协作处理。
@@ -75,3 +80,30 @@ node debugger/tests/lldb_dap_e2e.cjs --running
 `--running` 独立编译一个长循环测试，验证程序实际运行期间增加断点并命中、删除断点后继续执行、外部暂停和主动断开。它不等待长循环跑完；暂停响应有 2 秒验收上限，单次实测约 0.14 秒，不构成所有宿主的实时性能保证。报告分别位于 `build/validation/debugger/lldb-dap-report.json` 和 `build/validation/debugger-running/lldb-dap-report.json`。
 
 接口依据：[TurboWarp URL 参数](https://docs.turbowarp.org/url-parameters)、[无沙箱扩展](https://docs.turbowarp.org/development/extensions/unsandboxed)、[LLDB DAP](https://lldb.llvm.org/use/lldbdap.html)。
+
+## VS Code 内嵌舞台（0.1.5）
+
+扩展使用随包携带的 TurboWarp Scaffolding 0.4.0，不加载在线 editor。
+Ctrl+F5/Run 开启 TW 编译器；F5 连接现有 LLDB/IR 调试链路并关闭 TW 编译器。
+两者均在首次执行前关闭循环计时器，并读取 SB3 的帧率、高清画笔等原生设置。
+
+舞台点击后接收键盘输入和滚轮；切回代码时释放已按下的键。舞台不显示按钮、标题栏或底栏；控制统一交给 VS Code 调试工具栏。
+普通运行结束后保留舞台及最后画面，手动停止会话或关闭面板后才清理。面板隐藏时保留播放器上下文，关闭面板则终止
+对应会话。自定义舞台尺寸保持比例缩放。播放器禁用从项目自动加载外部扩展代码。
+
+播放器、音频资源及许可文件位于 debugger/player/，随 VSIX 和 CMake 安装目录打包。
+它们不依赖用户的 node_modules 或 CDN。来源版本、下载完整性和文件 SHA256 记录在
+player/vendor/SOURCE.json。此版本验证桌面 VS Code 本机运行；远程容器/SSH 端口转发尚未验收。
+
+验证记录：build/validation/vscode-extension-report.json（真实 Webview + LLDB，含 F5、
+Run、Ctrl+F5 和关闭面板清理），embedded-player.png、embedded-player-input-shift.png
+（真实渲染/键盘输入）。测试用独立 VS Code 配置目录，不修改用户工作区源码。
+
+0.1.7 修复高清画笔随窗口缩放反复采样而丢失笔迹：播放器为每种舞台尺寸选择稳定的
+高清画笔纹理分辨率，受渲染器和 GPU 纹理上限约束；窗口缩放只改变呈现尺寸。
+保持高清设置，不重新执行用户代码；可能比小窗口自适应纹理占用更多显存。
+连续 300/1400/420/1000 像素窗口宽度验证后，纹理对象不变，恢复原尺寸截图逐像素一致。
+
+0.1.8：播放器加载时显示简短状态（初始化、读取作品、加载造型、准备运行/连接调试器），
+进入运行或暂停后隐藏，不新增控制按钮。关键同步加载前让浏览器先绘制状态；网络错误显示具体原因。
+对应 Console 0.2.1 在输入等待期间绘制约 500 ms 闪烁下划线，由 flush 重绘可见区域。

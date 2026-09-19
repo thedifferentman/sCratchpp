@@ -53,3 +53,8 @@ is an explicit terminal error and is covered as a profile restriction.
 
 Generated bitcode, `.sb3`, extracted project JSON, VM snapshots, compiler/runtime
 hashes and diagnostics are retained under `tests/.tmp/stdlib` by default.
+
+
+The integration harness uses --whole-program and the SDK's memory_bytes recommendation,
+matching scrate final linking. With the enlarged locale/stream SDK, conservative linking
+without pruning may retain unsupported regional facets and unused conversion tables.

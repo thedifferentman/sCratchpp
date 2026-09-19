@@ -1,4 +1,4 @@
-"""Build the portable, no-exception Scratch libc++ SDK (no host C/C++ SDK).
+"""Build the portable, no-exception base C++ SDK (no host C/C++ SDK).
 
 The installed manifest is also consumed by the VS Code template.  All paths in
 it are relative to the SDK, so copying/installing the directory is sufficient.
@@ -22,17 +22,18 @@ RUNTIME = ROOT / "runtime" / "stdlib"
 TARGET = "x86_64-unknown-linux-gnu"
 COMMON_FLAGS = ["--target=" + TARGET, "-fno-exceptions", "-fno-rtti",
                 "-fno-stack-protector", "-fno-builtin",
-                "-nostdinc", "-nostdinc++"]
+                "-nostdinc", "-nostdinc++", "-mlong-double-64"]
 SOURCES = ["string", "vector", "memory", "functional", "optional", "variant",
-           "hash", "algorithm"]
+           "hash", "algorithm", "call_once", "ios", "ios.instantiations", "iostream", "ostream", "locale", "system_error", "error_category", "charconv", "ryu/d2fixed", "ryu/d2s", "ryu/f2s"]
 
 
 def verify_sources() -> None:
-    for line in (LIBCXX / "SOURCE_SHA256SUMS").read_text(encoding="utf-8").splitlines():
-        expected, relative = line.split("  ", 1)
-        source = LIBCXX / relative
-        if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest() != expected:
-            raise RuntimeError("Vendored libc++ input differs from the pinned release/configuration: " + relative)
+    for directory in (LIBCXX, ROOT / "third_party/llvm-libc", ROOT / "third_party/musl"):
+        for line in (directory / "SOURCE_SHA256SUMS").read_text(encoding="utf-8").splitlines():
+            expected, relative = line.split("  ", 1)
+            source = directory / relative
+            if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest() != expected:
+                raise RuntimeError("Vendored input differs from its pinned release/configuration: " + str(source))
 
 
 def compiler_flags(clang: str, sdk: Path) -> list[str]:
@@ -73,15 +74,33 @@ def build(clang: str, output: Path, llvm_link: str | None = None,
     headers.mkdir(parents=True, exist_ok=True)
     shutil.copytree(LIBCXX / "include", headers, dirs_exist_ok=True)
     shutil.copytree(RUNTIME / "include", output / "include", dirs_exist_ok=True)
+    # Remove only the generated optional-library artifacts from older SDKs.
+    # Resolve and check each target before recursive removal, including on Windows.
+    for library in ("console", "events", "pte"):
+        for relative in (Path("include") / library, Path("resources") / library):
+            stale = (output / relative).resolve()
+            if stale == output or not stale.is_relative_to(output):
+                raise RuntimeError("Generated SDK path escapes output: " + str(stale))
+            if stale.is_dir():
+                shutil.rmtree(stale)
     (output / "lib").mkdir(exist_ok=True)
     (output / "licenses").mkdir(exist_ok=True)
     shutil.copyfile(LIBCXX / "LICENSE.TXT", output / "licenses" / "libcxx-LICENSE.TXT")
+    shutil.copyfile(ROOT / "third_party/llvm-libc/LICENSE.TXT", output / "licenses/LLVM-libc-LICENSE.TXT")
+    shutil.copyfile(ROOT / "third_party/musl/COPYRIGHT", output / "licenses/musl-COPYRIGHT.txt")
     manifest = {"version": 1, "libcxx_version": "22.1.8", "target": TARGET,
                 "compile_flags": COMMON_FLAGS, "include_dirs": ["include/c++/v1", "include"],
-                "bitcode": ["lib/scratch-stdlib.bc"], "licenses": ["licenses/libcxx-LICENSE.TXT"],
+                "bitcode": ["lib/scratch-stdlib.bc"],
+                "llvm_major": 22, "scrpp_abi": "2",
+                # Development fixtures that compile their own library sources
+                # or draw stubs use only the C++ runtime to avoid duplicate definitions.
+                "core_bitcode": ["lib/scratch-stdlib.bc"],
+                "resources": [], "precompiled_packages": [],
+                "licenses": ["licenses/libcxx-LICENSE.TXT", "licenses/LLVM-libc-LICENSE.TXT", "licenses/musl-COPYRIGHT.txt"],
                 "heap_bytes": heap_bytes,
+                "memory_bytes": 200000,
                 "features": {"exceptions": False, "rtti": False, "threads": False,
-                             "localization": False, "filesystem": False}}
+                             "localization": "C", "filesystem": False}}
     objects = output / "objects"
     objects.mkdir(exist_ok=True)
     flags = _compiler_flags(clang, output, manifest)
@@ -92,15 +111,16 @@ def build(clang: str, output: Path, llvm_link: str | None = None,
         artifact = objects / (str(index) + "-" + source.stem + ".bc")
         command = [clang, *flags, "-ffreestanding", "-std=c++20", "-O1", "-fno-vectorize", "-fno-slp-vectorize",
                    "-D_LIBCPP_BUILDING_LIBRARY", "-DSCRATCH_HEAP_BYTES=" + str(heap_bytes),
-                   "-I", str(LIBCXX / "src"), "-emit-llvm", "-c", str(source), "-o", str(artifact)]
+                   "-I", str(LIBCXX / "src"), "-I", str(LIBCXX / "src/include"), "-I", str(ROOT / "third_party/llvm-libc"), "-emit-llvm", "-c", str(source), "-o", str(artifact)]
         print("Compiling " + source.name, flush=True)
         subprocess.run(command, check=True)
         bitcode.append(str(artifact))
     subprocess.run([link, *bitcode, "-o", str(output / manifest["bitcode"][0])], check=True)
+    (output / "lib/scrpp-stdlib.bc").unlink(missing_ok=True)
     temporary_manifest = output / "manifest.json.tmp"
     temporary_manifest.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     temporary_manifest.replace(manifest_path)
-    print("Scratch libc++ SDK: " + str(output), flush=True)
+    print("Scratch base C++ SDK: " + str(output), flush=True)
 
 
 def main() -> int:
@@ -115,7 +135,7 @@ def main() -> int:
     try:
         build(resolve_clang(args.clang), args.output_dir, args.llvm_link, args.heap_bytes)
         return 0
-    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
         print("error: " + str(error), file=sys.stderr)
         return 1
 

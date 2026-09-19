@@ -15,7 +15,7 @@
 | LLD、llvm-ar、Ninja、CMake | 宿主链接、归档和构建 | 使用相应宿主可运行的版本 |
 | LLVM 22 C API 共享库/导入库 | 在宿主内解析、链接和处理输入 IR | 必须与宿主架构匹配，不能用另一系统的 DLL/.so |
 | `scratch-float.bc` | 目标程序的纯整数软件浮点实现 | 当前 guest ABI 为小端 64 位；不是宿主动态库 |
-| Node.js 测试环境 | 执行真实 Scratch/TurboWarp VM | 只在运行 VM 测试时需要 |
+| Node.js 20+ | CLI 运行/调试及真实 VM 测试 | VS Code 内嵌播放器默认使用 VS Code 自带 Node，无需另外安装 |
 
 Windows 宿主可以处理 `x86_64-unknown-linux-gnu` 的 IR，这不会使生成的 SB3 依赖 Linux。反过来，Linux 宿主并不需要 Windows 工具来构建编译器。
 
@@ -134,8 +134,17 @@ prefix/
   share/scratch-llvm/
     scratch-float.bc
     SoftFloat-LICENSE.txt
+    stdlib/                 目标头文件、bitcode、manifest.json 和许可证
+    debugger/               调试桥接及离线播放器
+    tools/                  Python 工具
+    libraries/              Console / Events / PTE / Triangle 源码包
+    template/               可复制的项目模板，不含本机配置及构建产物
     licenses/
+  bin/scrate[.cmd]           Python 启动入口及同目录配套模块
+  share/doc/s_C_ratch__/     README、设计和 docs/
 ```
+
+安装不包含 Clang、LLDB、Python、Node 或已经打包的 VSIX。将安装前缀的 `bin` 加入 PATH；完整新用户流程见 [快速入门](QUICKSTART.md)。
 
 Linux/macOS 的宿主共享库需继续存在于系统或准备好的 SDK 中，安装 RPATH 会保留对应链接路径；目前不宣称把任意 Linux/macOS 动态库环境打成完全自包含包。
 

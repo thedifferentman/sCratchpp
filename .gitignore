@@ -6,6 +6,7 @@
 /debugger/dist/
 /tests/.tmp/
 /template/build/
+/examples/iostream/build/
 
 # Local CMake/Ninja state. CMakePresets.json remains tracked.
 CMakeFiles/
@@ -41,6 +42,8 @@ compile_commands.json
 
 # Reinstallable dependencies and language/tool caches; keep lock files.
 node_modules/
+.scrate/
+*.egg-info/
 __pycache__/
 *.py[cod]
 .pytest_cache/

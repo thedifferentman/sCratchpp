@@ -10,9 +10,20 @@
 python tools/build_stdlib.py --clang /path/to/clang --output-dir build/stdlib
 ```
 
-构建需要 Clang 22 和同版本 `llvm-link`，全部源码已随仓库提供；不在构建时下载。SDK 清单记录目标参数、头文件目录和 `lib/scratch-stdlib.bc`。C++ 用户代码使用 SDK 头文件和 Clang 的资源头文件，通过 `-nostdinc` 排除宿主头文件，生成 IR 后与上述 bitcode 链接。VS Code 模板自动完成这些步骤，并将 libc++ 许可证加入 `.sb3`。
+构建需要 Python 3.11+、Clang 22 和同版本 `llvm-link`，全部源码已随仓库提供；不在构建时下载。C++ 用户代码使用 SDK 头文件和 Clang 的资源头文件，通过 `-nostdinc` 排除宿主头文件。VS Code 模板自动完成编译与链接，并将 libc++ 许可证加入 `.sb3`。
 
-第一批采用 libc++ 22.1.8、Itanium C++ ABI、LP64、小端、64 位指针。SDK 禁用异常、RTTI、线程、localization、wide characters 和文件系统；不能与其他 libc++ ABI 配置混用。`std::string` 的基础操作可用，字符串数值转换及流等仍属于后续阶段。
+SDK 清单的主要字段：
+
+| 字段 | 含义 |
+| --- | --- |
+| `include_dirs` | libc++ 与基础运行库的头文件目录 |
+| `bitcode` / `core_bitcode` | 基础 C/C++ 运行库 `lib/scratch-stdlib.bc` |
+| `llvm_major` / `target` / `scrpp_abi` | 消费预编译 scrate 包时使用的 ABI 要求 |
+| `resources` / `precompiled_packages` | 兼容字段，现为空；可选库改由 scrate 管理 |
+
+清单路径均相对 SDK，复制 SDK 后仍可构建。Console、Events、PTE 是普通 scrate 包，不再随 SDK 自动链接；项目通过 `[dependencies]` 获取这些包。更新旧 SDK 时会清理过去生成的三个库头文件目录、资源目录和合并 bitcode。修改基础 C/C++ 运行库后重建 SDK；修改本地包后重新运行项目构建以更新锁文件。
+
+第一批采用 libc++ 22.1.8、Itanium C++ ABI、LP64、小端、64 位指针。SDK 禁用异常、RTTI、线程、wide characters 和文件系统，提供固定 C locale 的窄字符流与数值转换。ABI 2 使用 `-mlong-double-64`，不能与旧 ABI 1 的预编译 bitcode 混用；源码包会重新编译。详见 [iostream](../../docs/IOSTREAM.md)。
 
 ## 内存管理
 
@@ -41,7 +52,7 @@ python tools/build_stdlib.py --clang /path/to/clang --output-dir build/stdlib
 全局初始化沿用 LLVM `global_ctors`，局部静态初始化提供 Itanium ABI 的 `__cxa_guard_*`，递归初始化触发 trap。析构登记提供 `__cxa_atexit/__cxa_finalize/atexit`；默认最多 128 项未清理登记，可通过 `SCRATCH_ATEXIT_CAPACITY` 修改。顺序为后登记先调用；回调中新增登记和重入清理不会重复执行同一条目。
 
 - `main` 正常返回：编译器执行 `global_dtors`，本库的 finalizer 清理所有登记析构。
-- `exit`：清理登记析构后报告退出码并停止 Scratch 项目。
+- `exit`：清理登记析构并刷新标准输出后报告退出码、停止 Scratch 项目。
 - `_Exit`：直接报告退出码并停止，不执行析构。
 - `quick_exit`：仅执行独立的 `at_quick_exit` 登记，再停止。
 
@@ -49,7 +60,9 @@ python tools/build_stdlib.py --clang /path/to/clang --output-dir build/stdlib
 
 ## 范围与编译约束
 
-这不是完整 libc。头文件中为 libc++ 解析而提供的转换、格式化、环境等声明，**不代表已有实现**；若用户实际调用未提供的符号，最终链接/编译应报告未解析符号。标准输入输出、数学函数、locale 和文件系统属于后续批次。
+`scratch_platform.hpp` 提供 `bool scratch::is_turbowarp()`（模板的 `scratch.hpp` 同样声明此函数）。它调用兼容的布尔参数报告器 `is turbowarp?`，不加载 TW 扩展；原版返回假，TW 编译和解释模式均返回真。库通过这个接口选择控制台的键盘编辑行为。
+
+这不是完整 libc。头文件中为 libc++ 解析而提供的转换、格式化、环境等声明，**不代表已有实现**；若用户实际调用未提供的符号，最终链接/编译应报告未解析符号。标准输入输出和经典 locale 已实现首版；完整数学库、命名地区 locale 和文件系统仍未实现。
 
 运行库必须用 `-ffreestanding -fno-builtin` 构建，防止内存函数循环被优化为调用自身。SDK 的所有模块使用相同的 x86_64 LP64、小端、64 位指针布局和 libc++ 配置，禁用异常、RTTI 和线程；不能混入宿主目标的二进制库。
 

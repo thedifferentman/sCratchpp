@@ -64,3 +64,26 @@ test('bridge validates artifacts, serves only token paths, and exchanges WebSock
     assert(events.some(e => e.event === 'stopped'));
     bridge.close();
 });
+
+test('embedded player uses an ephemeral port, token-scoped offline assets and origin checks', async t => {
+    const directory=fs.mkdtempSync(path.join(os.tmpdir(),'scrpp-player-test-'));
+    t.after(()=>{assert(directory.startsWith(os.tmpdir()));fs.rmSync(directory,{recursive:true,force:true});});
+    const project=path.join(directory,'p.sb3');fs.writeFileSync(project,archive('{"targets":[]}'));
+    const events=[], bridge=new Bridge({project,noDebug:true,embeddedPlayer:true},e=>events.push(e));
+    t.after(()=>bridge.close());await bridge.listen();
+    assert(events.some(e=>e.event==='scrppPlayer'));
+    assert(!events.some(e=>e.event==='output'));
+    const url=new URL(bridge.url), base=new URL('.',url);
+    assert.notEqual(Number(url.port),0);
+    const response=await fetch(url);
+    assert.equal(response.status,200);
+    assert.match(response.headers.get('content-security-policy'),/default-src 'none'/);
+    const html=await response.text();
+    assert.match(html,/scaffolding.js/);
+    assert(!/<(?:button|header|footer)\b/.test(html), 'Stage must not have player controls or chrome');
+    assert.equal((await fetch(new URL('/player.html',url))).status,404);
+    assert.equal((await fetch(url,{headers:{Origin:'https://invalid.example'}})).status,403);
+    assert.equal((await fetch(new URL('scaffolding.js',base))).status,200);
+    assert.deepEqual(await (await fetch(new URL('settings.json',base))).json(),{noDebug:true});
+    bridge.close();
+});

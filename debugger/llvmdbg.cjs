@@ -50,8 +50,8 @@ class Bridge {
         this.ready.catch(() => {});
     }
     async listen() {
-        const port = this.args.port || 8000;
-        if (port !== 8000 && !this.args.noOpen) throw new Error('Automatic unsandboxed TurboWarp loading requires localhost port 8000.');
+        let port = this.args.embeddedPlayer ? 0 : (this.args.port || 8000);
+        if (!this.args.embeddedPlayer && port !== 8000 && !this.args.noOpen) throw new Error('Automatic unsandboxed TurboWarp loading requires localhost port 8000.');
         const allowedOrigins = new Set([new URL(this.args.turbowarpUrl || 'https://turbowarp.org/editor').origin, 'https://turbowarp.org', 'null']);
         this.server = http.createServer((req, res) => {
             const origin = req.headers.origin;
@@ -63,13 +63,29 @@ class Bridge {
             if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
             if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
             const resource = req.url?.split('?')[0];
+            const playerFiles = {'player.html':['index.html','text/html'], 'player.js':['player.js','application/javascript'],
+                'player.css':['player.css','text/css'], 'pen-resolution.js':['pen-resolution.js','application/javascript'], 'scaffolding.js':['vendor/scaffolding-with-music.js','application/javascript']};
+            const relative = resource?.startsWith(`/${this.token}/`) ? resource.slice(this.token.length+2) : '';
+            if (this.args.embeddedPlayer && playerFiles[relative]) {
+                const [file,type]=playerFiles[relative];
+                res.setHeader('Content-Type',type);
+                res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' ws://127.0.0.1:"+port+" blob: data:; worker-src 'self' blob:;");
+                res.end(fs.readFileSync(path.join(__dirname,'player',file))); return;
+            }
+            if (this.args.embeddedPlayer && relative==='settings.json') {
+                res.setHeader('Content-Type','application/json');
+                res.end(JSON.stringify({noDebug:!!this.args.noDebug}));return;
+            }
+            if (this.args.embeddedPlayer && relative==='engine.js') {
+                res.setHeader('Content-Type','application/javascript');res.end(fs.readFileSync(path.join(__dirname,'engine.js')));return;
+            }
             if (resource === `/${this.token}/project.sb3`) { res.setHeader('Content-Type', 'application/octet-stream'); res.end(this.project); }
             else if (resource === `/${this.token}/debug.json`) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(this.map)); }
             else if (resource === `/${this.token}/bridge.js`) {
                 res.setHeader('Content-Type', 'application/javascript');
                 const settings = {base: `http://localhost:${port}/${this.token}`, socket: `ws://localhost:${port}/${this.token}/socket`, noDebug: !!this.args.noDebug};
                 const engine = this.args.noDebug ? '' : fs.readFileSync(path.join(__dirname, 'engine.js'), 'utf8');
-                res.end(engine + '\n;(' + browserBridge.toString() + ')(Scratch, ' + JSON.stringify(settings) + ');\n');
+                res.end(engine + '\n;(' + browserBridge.toString() + ')(Scratch, ' + JSON.stringify(settings) + ', ' + waitForCostumeImages.toString() + ');\n');
             } else { res.writeHead(404); res.end('Not found'); }
         });
         this.server.on('upgrade', (req, socket, head) => {
@@ -85,6 +101,14 @@ class Bridge {
             this.peer.on('close', () => { if (!this.closed) { this.readyReject(new Error('TurboWarp disconnected')); this.onEvent({event: 'terminated', body: {}}); this.close(); } });
         });
         await new Promise((resolve, reject) => { this.server.once('error', reject); this.server.listen(port, '127.0.0.1', resolve); });
+        port=this.server.address().port;
+        if (this.args.embeddedPlayer) {
+            allowedOrigins.add(`http://127.0.0.1:${port}`);
+            this.url=`http://127.0.0.1:${port}/${this.token}/player.html`;
+            this.timer=setTimeout(()=>this.readyReject(new Error('VS Code player did not connect.')),this.args.connectTimeout||120000);
+            this.onEvent({event:'scrppPlayer',body:{url:this.url}});
+            return;
+        }
         this.timer = setTimeout(() => this.readyReject(new Error('TurboWarp did not connect. Allow the local debugging extension and localhost network access in the browser.')), this.args.connectTimeout || 120000);
         const url = new URL(this.args.turbowarpUrl || 'https://turbowarp.org/editor');
         if (!this.args.noDebug) url.searchParams.set('nocompile', '');
@@ -109,7 +133,32 @@ class Bridge {
     }
 }
 
-function browserBridge(Scratch, settings) {
+async function waitForCostumeImages(vm, timeout = 30000) {
+    // loadProject resolves after SVG skin creation, before its browser image
+    // has necessarily decoded. Starting a fast warp script here can stamp an
+    // empty texture permanently. Wait for known asynchronous SVG skins first.
+    const skins = vm.runtime.renderer?._allSkins;
+    if (!skins) return;
+    const pending = new Set();
+    for (const target of vm.runtime.targets) for (const costume of target.getCostumes()) {
+        const skin = skins[costume.skinId];
+        if (skin?._svgImage && skin._svgImageLoaded === false) pending.add(skin);
+    }
+    await Promise.all([...pending].map(skin => new Promise((resolve, reject) => {
+        const image = skin._svgImage;
+        const finish = error => {
+            clearTimeout(timer); image.removeEventListener('load', loaded); image.removeEventListener('error', failed);
+            error ? reject(error) : resolve();
+        };
+        const loaded = () => finish();
+        const failed = () => finish(new Error('A costume image could not be decoded.'));
+        const timer = setTimeout(() => finish(new Error('Timed out loading costume images.')), timeout);
+        image.addEventListener('load', loaded); image.addEventListener('error', failed);
+        if (skin._svgImageLoaded) finish();
+    })));
+}
+
+function browserBridge(Scratch, settings, waitForCostumeImages) {
     if (!Scratch.extensions.unsandboxed || !Scratch.vm) throw new Error('LLVM debugger must load unsandboxed from http://localhost:8000/.');
     Scratch.extensions.register({getInfo: () => ({id: 'scratchllvmdebug', name: 'LLVM Debugger', blocks: []})});
     const socket = new WebSocket(settings.socket); let engine;
@@ -127,6 +176,7 @@ function browserBridge(Scratch, settings) {
                 settings.noDebug ? null : fetch(settings.base + '/debug.json').then(r => { if (!r.ok) throw new Error('Debug map download failed'); return r.json(); })
             ]);
             await vm.loadProject(project);
+            await waitForCostumeImages(vm);
             if (!settings.noDebug) engine = globalThis.ScratchLLVMEngine.create(vm, map, send);
             send({event: 'ready'});
             if (settings.noDebug) vm.greenFlag();
@@ -177,7 +227,12 @@ class Adapter {
                 await this.bridge.listen(); this.event('initialized'); await this.bridge.ready;
                 for (const [source, lines] of this.breakpoints) await this.bridge.request('setBreakpoints', source, lines);
                 this.ready = true;
-                if (a.noDebug) { this.bridge.close(); setImmediate(() => this.event('terminated')); return {}; }
+                if (a.noDebug) {
+                    // Embedded stages stay connected and visible until VS Code stops
+                    // the session or the user closes the panel, including after main returns.
+                    if (!a.embeddedPlayer) { this.bridge.close(); setImmediate(() => this.event('terminated')); }
+                    return {};
+                }
                 if (this.configured) await this.start();
                 return {};
             } catch (error) { this.bridge.close(); throw error; }
@@ -226,13 +281,22 @@ async function main(args) {
         if (args[i] === '--turbowarp') options.turbowarp = args[++i];
         else if (args[i] === '--map') options.debugMap = args[++i];
         else if (args[i] === '--no-open') options.noOpen = true;
+        else if (args[i] === '--connect-timeout') {
+            options.connectTimeout = Number(args[++i]);
+            if (!Number.isSafeInteger(options.connectTimeout) || options.connectTimeout <= 0)
+                throw new Error('--connect-timeout must be a positive integer');
+        }
         else throw new Error('Unknown option: ' + args[i]);
     }
     if (options.noDebug && options.turbowarp) return openExternal(path.resolve(options.project), options.turbowarp);
     const bridge = new Bridge(options, msg => { if (msg.event === 'output') process.stderr.write(msg.body.output); else process.stderr.write(JSON.stringify(msg) + '\n'); });
-    process.once('SIGINT', () => bridge.close()); process.once('SIGTERM', () => bridge.close());
-    await bridge.listen(); await bridge.ready;
-    if (!options.noDebug) { console.error('Standalone debug smoke mode: stopping at entry. Use the VS Code launch configuration for interactive controls.'); await bridge.request('start', {stopOnEntry: true}); }
+    const stop = () => { bridge.close(); process.stdin.pause(); process.stdin.unref?.(); };
+    process.once('SIGINT', stop); process.once('SIGTERM', stop);
+    if (process.platform === 'win32') process.once('SIGBREAK', stop);
+    try {
+        await bridge.listen(); await bridge.ready;
+        if (!options.noDebug) { console.error('Standalone debug smoke mode: stopping at entry. Use the VS Code launch configuration for interactive controls.'); await bridge.request('start', {stopOnEntry: true}); }
+    } catch (error) { bridge.close(); throw error; }
 }
 if (require.main === module) main(process.argv.slice(2)).catch(error => { console.error(error.stack || error); process.exitCode = 1; });
-module.exports = {Adapter, Bridge, openExternal, projectChecksum, crc32, browserBridge};
+module.exports = {Adapter, Bridge, openExternal, projectChecksum, crc32, browserBridge, waitForCostumeImages};

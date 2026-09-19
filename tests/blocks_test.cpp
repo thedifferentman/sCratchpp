@@ -63,6 +63,22 @@ int main(int argc, char** argv) {
         project.green_flag({call("main", {})});
         const auto first = project.build();
         require(first == project.build(), "Build must be deterministic");
+        const auto config_text=first["targets"][0]["comments"]["scrpp_tw_settings"]["text"].get<std::string>();
+        require(config_text.find("\"framerate\":60")!=std::string::npos &&
+                config_text.find("\"hq\":true")!=std::string::npos &&
+                config_text.find("\"fencing\":false")!=std::string::npos &&
+                config_text.find(" // _twconfig_")!=std::string::npos,"Missing default TW settings");
+        Project custom_settings;
+        custom_settings.turbowarp_settings={{"framerate",72.5},{"unlimited_clones",true},{"high_quality_pen",false}};
+        const auto custom_text=custom_settings.build()["targets"][0]["comments"]["scrpp_tw_settings"]["text"].get<std::string>();
+        require(custom_text.find("\"framerate\":72.5")!=std::string::npos &&
+                custom_text.find("\"maxClones\":Infinity")!=std::string::npos,"TW overrides lost");
+        for (const auto& invalid : std::vector<Json>{Json{{"framerate",true}},Json{{"framerate",251}},
+                Json{{"high_quality_pen",1}},Json{{"stage_width",0}},Json{{"disable_compiler",true}}}) {
+            Project bad;bad.turbowarp_settings=invalid;
+            bool rejected=false;try{bad.build();}catch(const Error&){rejected=true;}
+            require(rejected,"Invalid TW setting accepted");
+        }
         require(first["targets"].size() == 2, "Exactly a stage and execution sprite are required");
         const auto& sprite = first["targets"][1];
         require(sprite["variables"].size() == 2, "Implicitly referenced variables were not collected");
@@ -95,6 +111,37 @@ int main(int argc, char** argv) {
         Project pen;
         pen.green_flag({stmt("pen_clear")});
         require(pen.build()["extensions"] == Json::array({"pen"}), "Pen extension must be inferred");
+        Project immutable;
+        immutable.lists["font::data"] = Json::array({"glyph"});
+        immutable.readonly_lists.insert("font::data");
+        immutable.green_flag({set("glyph", item("font::data", 1))});
+        (void)immutable.build();
+        immutable.procedure("invalid", {}, {append("font::data", "new")});
+        expect_error(immutable, "Writes to readonly resource lists must be rejected");
+        Project events;
+        events.resource_events.push_back({{"type", "wheel"}, {"queue", "events::wheel"},
+            {"enabled", "events_enabled"}, {"capacity", 128}});
+        events.green_flag({set("__scl_status", "running")});
+        const auto event_project = events.build();
+        require(event_project == events.build(), "Event lowering must be deterministic");
+        require(event_project["targets"].size() == 2, "Events must not introduce another sprite");
+        unsigned key_hats = 0, sensors = 0;
+        for (const auto& block : event_project["targets"][1]["blocks"]) {
+            if (block["opcode"] == "event_whenkeypressed") ++key_hats;
+            if (block["opcode"] == "sensing_keypressed") ++sensors;
+        }
+        require(key_hats == 2 && sensors == 1, "Wheel hats must share the physical-key filter");
+        events.resource_events.push_back({{"type", "keyboard"}, {"queue", "events::keyboard"},
+            {"enabled", "events_enabled"}, {"capacity", 128}});
+        const auto keyboard_project=events.build();
+        std::map<std::string,unsigned> keys;
+        for(const auto& block:keyboard_project["targets"][1]["blocks"])
+            if(block["opcode"]=="event_whenkeypressed")++keys[block["fields"]["KEY_OPTION"][0].get<std::string>()];
+        require(keys.size()==86,"Keyboard must include all supported ASCII and named keys");
+        require(keys["up arrow"]==2 && keys["down arrow"]==2,"Keyboard and wheel collectors must coexist");
+        require(keys["\\"]==1 && keys["\""]==1 && keys["A"]==1 && !keys.count("a"),
+            "Symbols must remain literal and case-folded letters must not produce duplicate hats");
+        require(keys["backspace"]==1 && keys["enter"]==1,"Named keys are missing");
         Project missing;
         missing.green_flag({call("missing", {})});
         expect_error(missing, "Undefined procedures must be rejected");

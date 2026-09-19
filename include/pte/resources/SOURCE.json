@@ -1,0 +1,82 @@
+{
+  "family": "Consolas",
+  "style": "Regular",
+  "font_version": "7.01",
+  "source_font_filename": "consola.ttf",
+  "source_font_sha256": "cf00b507b3286870cc5064ebd0633c303f70b491a4af25eec2d32df413db0179",
+  "primary_glyph_count": 2479,
+  "fallback_glyph_count": 41546,
+  "glyph_count": 44025,
+  "index_entries": 65536,
+  "fallback_codepoint": "U+25A1",
+  "fallback_glyph_index": 2949,
+  "font_sha256": "e85555a94fbf49fcb20beb7e0f929335f927e911f878a6f0196fee3d2b7d3988",
+  "index_sha256": "491cc07138d7e0352398b16749088a15246a158e83aa8312c3243541a6cde978",
+  "ascii_advance_units": 28,
+  "converter": {
+    "archive_filename": "font.zip",
+    "archive_sha256": "3fb1cf7aeb8a5c2edbc21b492197f9c0790b12cbff91624435058d45ada95626",
+    "author": "obdopqo",
+    "package_license": "MIT",
+    "size": 64,
+    "quality": 16,
+    "measured_height": 78,
+    "imagemagick": "7.1.2-31 Q8",
+    "jimp": "0.16.13",
+    "adapted_main_sha256": "fbb2596e31587fbc136f750e97b5aac78225807c3719888d29edecd672e02009",
+    "changes": [
+      "Rasterize only font cmap pages and defined characters; retain original raster/thinning/stroke simplification algorithms.",
+      "Skip unsupported codepoints to avoid replacing fallback CJK with .notdef glyphs."
+    ],
+    "result_sha256": "4b48dcfd274d0bc6e707008066a5f92fbee6a962cf017b3934bc7a48a97384c4",
+    "cmap_filter_sha256": "2353ebc3a7908370c2890481642d3384b73843adf990a8b7e4c2a2b6e249c0e5"
+  },
+  "record_format": "BMP character + 2 hex advance units + 3 hex packed points, M separates strokes; 64 units/normalized glyph height",
+  "provenance": "Consolas Regular first, Microsoft YaHei Regular second, original PTE records last. Microsoft YaHei is face 0 from the local Windows msyh.ttc collection. Only defined BMP glyphs are converted. Original TTF/TTC files are not included in the source tree.",
+  "license": "Consolas and Microsoft YaHei retain their original font licenses. The converter MIT declaration does not license font data. Original PTE fallback provenance is retained separately.",
+  "fallback_family": "Microsoft YaHei",
+  "font_priority": [
+    "Consolas",
+    "Microsoft YaHei",
+    "Original PTE"
+  ],
+  "secondary_glyph_count": 28916,
+  "legacy_fallback_glyph_count": 12630,
+  "fallback_font": {
+    "family": "Microsoft YaHei",
+    "style": "Regular",
+    "collection_face": 0,
+    "source_filename": "msyh.ttc",
+    "source_sha256": "d79c55e68b1131eea0cc1c47be4f572d964f28c682e143db2ad09c1e4cb07a3f",
+    "extracted_font_sha256": "91fb74bae3e0c1758262a35b4ecc593653cde3298292afcecf4e20fc61dbda1b",
+    "font_version": "Version 6.31",
+    "cmap_bmp_count": 29709,
+    "generated_glyph_count": 29705,
+    "used_glyph_count": 28916,
+    "converter": {
+      "size": 64,
+      "quality": 16,
+      "measured_height": 83,
+      "imagemagick": "7.1.2-31 Q8",
+      "jimp": "0.16.13",
+      "result_sha256": "2348a3b02c1b6a4ac3adfcbe03641f1af02a616dfd9cfbeff66cfb036f552cfc",
+      "adapted_main_sha256": "fbb2596e31587fbc136f750e97b5aac78225807c3719888d29edecd672e02009",
+      "cmap_filter_sha256": "6e5978e657381e631414bd110970ac36d740c72529d32a69bf77670f9bad68dd"
+    }
+  },
+  "legacy_fallback_font": {
+    "source_filename": "B22 四万字中文画笔字库(PTE,纯画笔,汉字,韩语,日语,unicode).sb3",
+    "source_sha256": "0cf557917fb651ff5e0f6a6feafb2a605552cbbfa38a0e1e216aba315b2e18e9",
+    "source_project_json_sha256": "1a47760e43ff01a7fff01ace99431a843cf8c43bfea511bac166ed548ca06a07",
+    "source_list": "字体",
+    "glyph_count": 42221,
+    "index_entries": 65536,
+    "fallback_codepoint": "U+25A1",
+    "fallback_glyph_index": 1258,
+    "font_sha256": "787a1b0a44f1b767c8788d937c4ea50333a09511ad1196982c22570134fdd4b8",
+    "index_sha256": "7d936f93cdf0b660a64850edbbebbeb48bb01ed2ec325127904360bcff3d2eea",
+    "record_format": "BMP character + 2 hex advance units + 3 hex packed points, M separates strokes; 64 units/em",
+    "provenance": "User-provided Scratch project. Font records extracted verbatim; codepoint index generated.",
+    "license": "Unspecified in supplied project; no ownership or redistribution license is asserted."
+  }
+}

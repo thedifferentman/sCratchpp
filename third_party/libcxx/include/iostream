@@ -65,6 +65,9 @@ extern _LIBCPP_EXPORTED_FROM_ABI wostream wcerr;
 extern _LIBCPP_EXPORTED_FROM_ABI wostream wclog;
 #  endif
 
+// Scratch guest: keep stream initialization reachable only for users of <iostream>.
+static ios_base::Init __scratch_streams_init _LIBCPP_INIT_PRIORITY_MAX;
+
 _LIBCPP_END_NAMESPACE_STD
 
 #endif // __cplusplus < 201103L && defined(_LIBCPP_USE_FROZEN_CXX03_HEADERS)

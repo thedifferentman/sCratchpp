@@ -7,6 +7,10 @@ static int destroyed;
 struct Counted { ~Counted() { ++destroyed; } };
 
 int main() {
+    void* first = ::operator new(1);
+    void* second = ::operator new(1);
+    if (reinterpret_cast<std::uintptr_t>(second) % __STDCPP_DEFAULT_NEW_ALIGNMENT__) return 7;
+    ::operator delete(first); ::operator delete(second);
     auto value = new int(42);
     if (*value != 42) return 1;
     delete value;

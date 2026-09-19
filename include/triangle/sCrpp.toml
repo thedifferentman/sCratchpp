@@ -1,0 +1,9 @@
+version = 1
+[package]
+name = "triangle"
+version = "0.1.1"
+resource_namespace = "__scl_triangle"
+
+[library]
+sources = ["triangle.cpp"]
+include_dirs = ["include"]

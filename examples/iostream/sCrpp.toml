@@ -1,0 +1,8 @@
+version = 1
+[package]
+name = "iostream-example"
+version = "0.1.0"
+
+[dependencies]
+# Console 0.3.0 provides the standard-stream adapter.
+console = "0.3.0"

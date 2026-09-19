@@ -1,0 +1,59 @@
+{
+  "packages": [
+    {
+      "dependencies": [],
+      "name": "events",
+      "sha256": "52ab1dd0b47de29a0b1388db25e9310c7fe679c9c42eab141cd652354e1b1cd0",
+      "source": {
+        "kind": "registry",
+        "registry": "https://scrate.shapy.cn/",
+        "url": "https://scrate.shapy.cn/packages/events/0.1.0/events-0.1.0.zip"
+      },
+      "version": "0.1.0"
+    },
+    {
+      "dependencies": [],
+      "name": "pte",
+      "sha256": "f3d34ec9d0ecdb32816a37291536965ca5ebbf209b14037ccd3e8a31d257440a",
+      "source": {
+        "kind": "registry",
+        "registry": "https://scrate.shapy.cn/",
+        "url": "https://scrate.shapy.cn/packages/pte/0.1.0/pte-0.1.0.zip"
+      },
+      "version": "0.1.0"
+    },
+    {
+      "dependencies": [],
+      "name": "triangle",
+      "sha256": "0f4bc8b6b09c610c5edf2eb73f0f05736b0cc84bb6abce136dcbdf1f7d900a5e",
+      "source": {
+        "kind": "registry",
+        "registry": "https://scrate.shapy.cn/",
+        "url": "https://scrate.shapy.cn/packages/triangle/0.1.1/triangle-0.1.1.zip"
+      },
+      "version": "0.1.1"
+    },
+    {
+      "dependencies": [
+        "events",
+        "pte",
+        "triangle"
+      ],
+      "name": "console",
+      "sha256": "204896e22e0f6d6b2d376fff6a985b7eea3f4724a4b0fe09e934f3036f845036",
+      "source": {
+        "kind": "registry",
+        "registry": "https://scrate.shapy.cn/",
+        "url": "https://scrate.shapy.cn/packages/console/0.3.0/console-0.3.0.zip"
+      },
+      "version": "0.3.0"
+    }
+  ],
+  "root": {
+    "dependencies": [
+      "console"
+    ],
+    "manifestSha256": "619ed8dd45fce8abaf8e1aa543ff12031c508bac73554c94f672333e64d24373"
+  },
+  "schemaVersion": 1
+}

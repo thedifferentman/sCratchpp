@@ -5,6 +5,7 @@
             "name": "Scratch: Debug",
             "type": "scratch-llvm",
             "request": "launch",
+            "mode": "debug",
             "project": "${workspaceFolder}/build/debug/project.sb3",
             "debugMap": "${workspaceFolder}/build/debug/project.debug.json",
             "preLaunchTask": "Scratch: Debug",

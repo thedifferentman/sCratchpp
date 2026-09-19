@@ -1,0 +1,24 @@
+version = 1
+
+[package]
+name = "example"
+version = "0.1.0"
+
+# Bare filenames resolve in resources/ beside this manifest.
+# Explicit paths such as images/marker.svg resolve beside the manifest.
+[[costumes]]
+file = "marker.svg"
+
+# Console 0.3.0 provides iostream and local cell erasure (requires SDK ABI 2).
+[dependencies]
+console = "0.3.0"
+
+[turbowarp]
+framerate = 60 # Numeric; 0 follows display refresh rate, maximum 250.
+high_quality_pen = true
+offscreen_sprites = true
+interpolation = false
+unlimited_clones = false
+remove_limits = false
+stage_width = 480
+stage_height = 360

@@ -44,6 +44,7 @@ exports.run = async () => {
             const state = current;
             return {onDidSendMessage(message) {
                 state.messages.push(message);
+                fs.appendFileSync(path.join(root,'build/validation/vscode-player-dap.jsonl'),JSON.stringify(message)+'\n');
                 const url = message.event === 'output' && /Opening TurboWarp: (\S+)/.exec(message.body?.output || '');
                 if (url) connect(url[1]).catch(e => { state.error=e; });
             }, onError(error) { state.error=error; }};
@@ -52,33 +53,60 @@ exports.run = async () => {
     try {
         const folder = vscode.workspace.workspaceFolders[0];
         assert(folder, 'Test workspace missing');
-        for (const mode of ['debug', 'run']) {
+        for (const mode of ['debug', 'run', 'noDebug']) {
             current = {messages:[], mode};
             const configuration = {
-                name:'Activation regression ' + mode, type:'scratch-llvm', request:'launch', mode,
+                name:'Activation regression ' + mode, type:'scratch-llvm', request:'launch',
+                mode: mode === 'noDebug' ? 'debug' : mode,
                 project:path.join(root,'build/validation/debugger/program.sb3'),
                 debugMap:path.join(root,'build/validation/debugger/program.debug.json'),
                 clang:path.join(root,'build/toolchains/windows/root/clang64/bin/clang.exe'),
                 lldbDap:process.env.SCRATCH_LLDB_DAP || 'C:/Program Files/LLVM/bin/lldb-dap.exe',
                 lldbPython:path.join(root,'build/debugger/python311'),
+                scrate:process.env.SCRATE_EXECUTABLE || 'scrate',
                 noOpen:true, port:18857, stopOnEntry:true
             };
-            assert(await vscode.debug.startDebugging(folder, configuration), 'VS Code refused to start ' + mode);
+            assert(await vscode.debug.startDebugging(folder, configuration, {noDebug: mode === 'noDebug'}), 'VS Code refused to start ' + mode);
             const deadline = Date.now()+30000;
-            while (!current.messages.some(m => m.event === (mode === 'debug' ? 'stopped' : 'terminated'))) {
+            while (!current.messages.some(m => mode === 'debug' ? m.event === 'stopped' :
+                m.type === 'response' && m.command === 'launch' && m.success)) {
                 if (current.error) throw current.error;
                 if (Date.now()>deadline) throw new Error('Actual VS Code adapter did not reach ' + mode);
                 await delay(20);
             }
             const initialize = current.messages.find(m=>m.type==='response' && m.command==='initialize');
             assert(initialize?.success, 'Adapter initialize failed');
+            assert(current.messages.some(m=>m.event==='scrppPlayer'), 'Embedded player was not requested');
             if (mode==='debug') {
                 const frames = await current.session.customRequest('stackTrace',{threadId:1});
                 assert.equal(frames.stackFrames[0].line,10);
                 assert(initialize.body.$__lldb_version, 'Debug must use real LLDB');
             } else assert(!initialize.body.$__lldb_version, 'Run must not start LLDB');
-            results.push({mode,passed:true});
-            await vscode.debug.stopDebugging(current.session);
+            if(mode!=='debug') {
+                const deadline=Date.now()+15000;
+                while(!current.messages.some(m=>m.event==='scrppRunStopped')) {
+                    if(Date.now()>deadline)throw new Error('Run did not finish in embedded stage');
+                    await delay(20);
+                }
+                await delay(500);
+                assert(!current.messages.some(m=>m.event==='terminated'), 'Run completion closed the stage');
+                assert(vscode.window.tabGroups.all.some(g=>g.tabs.some(t=>t.label==='sCr++ · '+current.session.name)), 'Completed stage tab missing');
+                results.push({mode,completedStageRetained:true});
+            }
+            results.push({mode,passed:true,launcher:'installed-scrate'});
+            if(mode==='noDebug') {
+                const ended=new Promise(resolve=>{
+                    const disposable=vscode.debug.onDidTerminateDebugSession(session=>{
+                        if(session.id===current.session.id){disposable.dispose();resolve();}
+                    });
+                    disposables.push(disposable);
+                });
+                await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+                let timer;
+                try {await Promise.race([ended,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Closing player did not stop session')),10000);})]);}
+                finally {clearTimeout(timer);}
+                results.push({closePlayerStopsSession:true});
+            } else await vscode.debug.stopDebugging(current.session);
             await delay(150);
         }
         assert(vscode.extensions.getExtension('scratch-llvm.debugger').isActive);

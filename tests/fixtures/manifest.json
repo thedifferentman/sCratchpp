@@ -3,6 +3,10 @@
   "entry": "main",
   "returnType": "i32",
   "fixtures": [
+    {"file": "iostream_intrinsics.ll", "expectedExitCode": 12, "expectedReturnBytes": [12, 0, 0, 0], "features": ["cttz.elts scalar reduction", "odd-width and i1 lanes", "zero vector", "invariant markers"]},
+    {"file": "three_way_compare.ll", "expectedExitCode": 74, "expectedReturnBytes": [74, 0, 0, 0], "features": ["LLVM ucmp/scmp three-way comparison", "independent result width", "i64 unsigned high bit", "i128 signed extrema", "packed odd-width vectors", "i1 input signedness"]},
+    {"file": "negative/three_way_compare_width.ll", "expectCompileError": true, "diagnosticPattern": "at least 2 bits"},
+    {"file": "asm_float.ll", "expectedExitCode": 73, "expectedReturnBytes": [73, 0, 0, 0], "features": ["native Scratch double reporter output", "negative zero", "NaN and infinity", "fractional days_since2000"]},
     {"file": "slot_constant_shift.ll", "expectedExitCode": 0, "expectedReturnBytes": [0, 0, 0, 0], "features": ["constant shift slot specialization", "negative i9 arithmetic right shift", "i64/i65/i257 shifts", "commuted power-of-two multiply"]},
     {"file": "slot_initialization.ll", "expectedExitCode": 0, "expectedReturnBytes": [0, 0, 0, 0], "features": ["shared constant initialization", "numeric table items", "i1 constant pool", "i9 normalization"]},
     {"file": "slot_call_name.ll", "expectedExitCode": 0, "expectedReturnBytes": [0, 0, 0, 0], "features": ["slot call cache", "direct function named indirect", "indirect call same signature"]},

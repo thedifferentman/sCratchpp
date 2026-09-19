@@ -1,0 +1,15 @@
+{
+  "source_filename": "C1 画笔快速画三角形.sb3",
+  "source_sha256": "14562c475310a7ce30ae81e953baacfd1f58ac623f19792010de4a110f979e6a",
+  "project_json_sha256": "16719b45eac8bf07d2597308f96dcc929b3bd58501ac5e2669d512f9a4629c83",
+  "procedure": "画三角形 %s %s %s %s %s %s",
+  "layers": 8,
+  "changes": [
+    "Namespaced temporary variables",
+    "Inlined motion helper and removed empty comment calls",
+    "Added explicit pen-up/color entry and pen-up exit",
+    "Nonpositive area/diameter skips drawing",
+    "Added fixed-point input adapter; native coordinate division precedes the original kernel"
+  ],
+  "license": "Unspecified in supplied project; no ownership or redistribution license is asserted."
+}

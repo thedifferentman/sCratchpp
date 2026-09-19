@@ -6,11 +6,21 @@
 
 后端的基本操作已采用 [共享槽位运行时](docs/SLOT_RUNTIME.md)：指令调用传递 SSA 槽位地址，复用数值和访存过程；常量、槽位视图及 phi 复制计划由编译器处理。原有精确类型、字节内存和 SoftFloat 语义保持不变。
 
+资源由独立的 `sCrpp.toml` 声明并链接，全部挂在唯一的 `Program` 角色上。PNG 保留原始像素并封装成 SVG；模板自动生成 `scratch.cpp`，提供造型切换、显示/隐藏和图章接口。`scratch::set_string` 将 UTF-8 文本写入 Scratch 变量 `__scl_string`，支持中文及 emoji。参见 [资源使用说明](docs/RESOURCES.md) 和 [模板示例](template/examples/resources.cpp)。资源清单处理需要 Python 3.11 或更新版本。
+
+[scrate](docs/SCRATE.md) 统一提供 `build/run/debug`、固定版本包管理、本地依赖、锁文件、下载校验和离线构建，默认静态仓库为 `https://scrate.shapy.cn`。[控制台](include/console/README.md)、[事件](include/events/README.md)、[PTE 字库](include/pte/README.md) 都是普通包，通过项目 `[dependencies]` 接入；基础 SDK 继续自动提供 C++ 标准库。模板固定使用 Console 0.3.0（依赖 Events、PTE 和 Triangle）；标准流需要目标 SDK ABI 2。用法见 [控制台示例](template/examples/console.cpp)，Console 可接入 `std::cin/cout/cerr/clog`，详见 [iostream 首版](docs/IOSTREAM.md)。
+
+事件库还支持键盘按下回调。控制台提供 `read_line()` 及 `begin_input/try_read_line`，回车提交。TW 使用 Backspace 删除，并按采集时的 Shift 状态区分字母大小写；原版使用反斜杠 `\` 删除、字母大写。`scratch.hpp` 提供 `scratch::is_turbowarp()`。行输入仍限 ASCII；标准流适配已通过 Console 0.2.0 提供。见 [行输入示例](template/examples/console_input.cpp)。
+
 共享槽位改造的对照测量中，模板在相同 O2 与裁剪设置下由 131,100 块降至 20,521 块；验证与性能测量见 [槽位运行时验证记录](docs/SLOT_RUNTIME_RESULTS.md)。
 
 完整设计见 [DESIGN.md](DESIGN.md)。实际测试记录见 [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md)。设计路线中的功能不自动等于当前支持能力，以下以实现为准。
 
-最新宿主验证见 [跨平台验证记录](docs/CROSS_PLATFORM.md)：Linux 和独立 Windows Clang 构建均通过 50 组完整回归。
+2026-09-13 的宿主验证见 [跨平台验证记录](docs/CROSS_PLATFORM.md)：当时 Linux 和独立 Windows Clang 构建均通过 50 组回归。后续 iostream、播放器和控制台更新另有 Windows 验证，不能将旧记录视为当前版本的完整跨平台验收。当前交付检查见 [发布检查](docs/RELEASE_READINESS.md)。
+
+## 新用户入口
+
+这是开发者 Alpha。首次从源码使用请按 [安装快速入门](docs/QUICKSTART.md) 完成工具链准备、构建、安装、复制模板和 VS Code 扩展安装。Git 仓库不包含编译好的 Clang、scratch-llvm、目标 bitcode 或 VSIX；这些通过准备脚本下载或本地构建生成。`pip install .` 只安装 scrate，不替代完整编译器安装。
 
 ## 构建
 
@@ -77,6 +87,8 @@ python3 tools/bootstrap_linux.py --with-node
 ```text
 --dump-ir path.json    导出规范化、完成必要降级的后端输入
 --debug-map path.json  导出源码、IR、槽位和积木位置映射，不插入调试积木
+--resources path.json 链接已准备的独立资源包，可重复传入
+--turbowarp-settings path.json 覆盖 SB3 中保存的 TurboWarp 设置（与模板 [turbowarp] 同名字段）
 --passes pipeline     指定 LLVM 优化流水线；默认不额外执行用户优化
 --whole-program       最终程序内部化和全局死代码裁剪；自动保留入口及所需浮点辅助函数
 --data-layout layout  为缺失布局的模块显式提供布局
@@ -97,7 +109,7 @@ VS Code 模板默认使用 `--passes 'default<O2>' --whole-program`。该模式�
 
 VS Code 用户可复制 [template/](template/README.md) 作为 C++ 工程，配置工具路径后按 `Ctrl+Shift+B` 生成 `.sb3`；模板包含画笔示例、多源文件构建及代码补全配置。
 
-模板同时提供 `Scratch: Debug` 任务和 F5 调试配置，以及 `Scratch: Run in TurboWarp` 直接运行配置。安装随附的 VSIX 后，真实 LLDB 通过 IR 远程目标控制 TW 解释器，支持动态源码断点、暂停/继续、源码单步、调用栈及基本变量。调试自动关闭 TW 编译，不依赖 Debugger 插件，不固定 TW 版本。安装及首版限制见 [调试器说明](debugger/README.md)。
+模板同时提供 `Scratch: Debug` 任务和 F5 调试配置，以及 `Scratch: Run in TurboWarp` 直接运行配置。安装随附的 VSIX 后，真实 LLDB 通过 IR 远程目标控制 TW 解释器，支持动态源码断点、暂停/继续、源码单步、调用栈及基本变量。调试自动关闭 TW 编译，不依赖 Debugger 插件。VS Code 使用随扩展提供的 TurboWarp Scaffolding 0.4.0；外部浏览器入口在连接时检查接口兼容性。安装及首版限制见 [调试器说明](debugger/README.md)。
 
 C 示例无需系统头文件或标准库：
 
@@ -118,9 +130,9 @@ Scratch 汇编使用官方 opcode，不加额外前缀；可使用命名输入�
 
 ## 当前支持范围
 
-默认构建同时提供 `build/clang/stdlib/`：固定 libc++ 22.1.8 的目标头文件、基础 C/C++ 运行库与 bitcode。它在 LLVM 层链接，不使用宿主标准库二进制。VS Code 模板会自动发现该 SDK，现在可以直接包含 `<vector>`、`<string>`、`<map>`、`<algorithm>` 等常用头文件。
+默认构建同时提供 `build/clang/stdlib/`：固定 libc++ 22.1.8 的目标头文件和基础 C/C++ 运行库。它在 LLVM 层链接，不使用宿主标准库二进制。VS Code 模板自动发现 SDK，可以直接包含 `<vector>`、`<string>`、`<map>`、`<algorithm>` 等头文件；`<console/console.hpp>` 等可选包头文件由 scrate 依赖提供。工具链需要 Python 3.11+；修改基础运行时后重建 SDK，修改本地包则重新构建项目以更新锁文件。
 
-这批实现包括可回收的 16 KiB 堆、对齐分配、`new/delete`、基础内存和窄字符串函数、全局/局部静态对象生命周期、`atexit/exit` 与终止式错误处理。配置禁用异常、RTTI 和线程；输入询问、Console 列表输出、数学库及虚拟文件系统留到后续批次。具体接口、容量和限制见 [目标基础运行库](runtime/stdlib/README.md)。
+这批实现包括可回收的 16 KiB 堆、对齐分配、`new/delete`、基础内存和窄字符串函数、全局/局部静态对象生命周期、`atexit/exit` 与终止式错误处理。配置禁用异常、RTTI 和线程；已提供固定 C locale 的窄字符标准流，完整数学库及虚拟文件系统仍待后续实现。独立的画笔控制台通过自身接口提供输入输出。具体接口、容量和限制见 [目标基础运行库](runtime/stdlib/README.md)。
 
 可单独执行 `python tools/build_stdlib.py --clang /path/to/clang --output-dir build/stdlib`。CMake 可用 `-DSCRATCH_BUILD_STDLIB=OFF` 关闭 SDK 构建；`SCRATCH_HEAP_BYTES` 控制目标堆容量。标准库测试为 `ctest --test-dir build/clang -R '^stdlib$' --output-on-failure`。
 
@@ -172,6 +184,9 @@ python tools/build_float_runtime.py --host-test
 - LLVM C API头：22.1.8，许可见 `third_party/llvm/LICENSE.txt`；使用系统或独立前缀内的匹配LLVM共享库。
 - nlohmann/json：3.12.0，许可见 `third_party/nlohmann/LICENSE.txt`。
 - Berkeley SoftFloat：Release 3e，固定源码和SHA-256清单见 `runtime/softfloat/`。
+- 目标 libc++、LLVM libc 和 musl 来源、补丁及许可见 `third_party/libcxx/`、`third_party/llvm-libc/`、`third_party/musl/`。
+- 离线 TurboWarp 播放器的来源及许可见 `debugger/player/vendor/`。
 - 真实VM测试依赖固定在 `tests/package-lock.json`。
+- 主项目自有代码采用 [MIT License](LICENSE)。PTE 和三角形引擎作者的引用声明见 [第三方来源与许可](THIRD_PARTY_NOTICES.md)；第三方内容保留原有许可，混合字库的字体分发依据仍需补齐。
 
 生成的含SoftFloat运行时的SB3自动包含 `licenses/SoftFloat.txt`。`tools/fetch_dependencies.py` 仅用于维护时从官方来源恢复固定版本头文件，正常构建无需运行。

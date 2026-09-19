@@ -1,0 +1,6 @@
+* text=auto eol=lf
+# scrate.lock fingerprints the manifest's exact bytes on every platform.
+sCrpp.toml -text
+*.png -text
+*.jpg -text
+*.zip -text

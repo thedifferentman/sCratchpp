@@ -1,6 +1,8 @@
 #include "scratch/assembly.hpp"
 #include "scratch/platform.hpp"
 #include <cstdint>
+#include <cstring>
+#include <limits>
 #include <filesystem>
 #include <iostream>
 
@@ -101,6 +103,41 @@ int main(int argc, char** argv) {
         extend(main, snapshot.code);
         main.push_back(set("case_snapshot", snapshot.bytes.at(0)));
         expected["case_snapshot"] = 255;
+        const auto test_double = [&](const std::string& name, double value, const std::string& text) {
+            const auto result = assemble(project, text, "=r", Json{{"kind", "float"}, {"bits", 64}}, {}, {}, true);
+            require(result.bytes.size() == 8, "Double assembly result width mismatch");
+            extend(main, result.code);
+            std::uint64_t bits;
+            std::memcpy(&bits, &value, sizeof(bits));
+            for (unsigned i = 0; i < 8; ++i) {
+                const auto byte_name = "case_f64_" + name + "_" + std::to_string(i);
+                main.push_back(set(byte_name, result.bytes[i]));
+                expected[byte_name] = (bits >> (8 * i)) & 255;
+            }
+        };
+        test_double("fraction", 1.5, "operator_divide NUM1=3 NUM2=2");
+        test_double("negative", -1.5, "operator_divide NUM1=-3 NUM2=2");
+        test_double("zero", 0.0, "operator_divide NUM1=0 NUM2=2");
+        test_double("negative_zero", -0.0, "operator_divide NUM1=0 NUM2=-2");
+        test_double("one", 1.0, "operator_add NUM1=1 NUM2=0");
+        test_double("third", 1.0 / 3, "operator_divide NUM1=1 NUM2=3");
+        test_double("huge", 1.7976931348623157e308, "operator_multiply NUM1=1.7976931348623157e308 NUM2=1");
+        test_double("min_normal", 2.2250738585072014e-308, "operator_divide NUM1=2.2250738585072014e-308 NUM2=1");
+        test_double("min_subnormal", std::numeric_limits<double>::denorm_min(),
+                    "operator_divide NUM1=2.2250738585072014e-308 NUM2=4503599627370496");
+        test_double("max_subnormal", 2.2250738585072009e-308,
+                    "operator_multiply NUM1=2.2250738585072014e-308 NUM2=0.9999999999999998");
+        test_double("infinity", std::numeric_limits<double>::infinity(), "operator_divide NUM1=1 NUM2=0");
+        test_double("negative_infinity", -std::numeric_limits<double>::infinity(), "operator_divide NUM1=-1 NUM2=0");
+        test_double("nan", std::numeric_limits<double>::quiet_NaN(), "operator_divide NUM1=0 NUM2=0");
+        test_double("text", 0.0, "operator_join STRING1=\"not\" STRING2=\"numeric\"");
+        test_double("boolean", 1.0, "operator_equals OPERAND1=1 OPERAND2=1");
+        const auto clock = assemble(project,
+            "data_setvariableto VARIABLE=\"case_f64_clock_native\" VALUE=(sensing_dayssince2000); "
+            "$0=data_variable VARIABLE=\"case_f64_clock_native\"", "=r",
+            Json{{"kind", "float"}, {"bits", 64}}, {}, {}, true);
+        extend(main, clock.code);
+        for (unsigned i = 0; i < 8; ++i) main.push_back(set("case_f64_clock_" + std::to_string(i), clock.bytes[i]));
         const auto barrier = assemble(project, " \n\t", "~{memory}", void_type(), {}, {}, true);
         require(barrier.code.empty() && barrier.bytes.empty(), "Empty memory barrier must emit no blocks");
         const auto clang_barrier = assemble(project, "", "~{memory},~{dirflag},~{fpsr},~{flags},~{cc}", void_type(), {}, {}, true);
@@ -137,6 +174,8 @@ int main(int argc, char** argv) {
         reject("operator_add NUM1=1 NUM2=2", "=r,", integer(32));
         reject("operator_add NUM1=1 NUM2=2", "=r", integer(64));
         reject("operator_add NUM1=1 NUM2=2", "=r", Json{{"kind", "float"}, {"bits", 32}});
+        reject("operator_add NUM1=$1 NUM2=2", "=r,r", integer(32),
+               {Json{{"kind", "float"}, {"bits", 64}}}, {Bytes{0, 0, 0, 0, 0, 0, 0, 0}});
         reject("", "r", void_type(), {integer(32)}, {constant(32, 1)});
         reject("", "~{memory},~{memory}", void_type());
         reject("pen_penDown", "", void_type());
@@ -144,6 +183,21 @@ int main(int argc, char** argv) {
         reject("operator_mathop OPERATOR=\"bad\" NUM=1", "=r", integer(32));
         reject("data_variable VARIABLE=$1", "=r,r", integer(32), {integer(32)}, {constant(32, 1)});
         reject("data_variable VARIABLE=\"__scl_asm0_value\"", "=r", integer(32));
+        reject("data_variable VARIABLE=\"__scl_unicode\"", "=r", integer(32));
+        for (const auto& text : {"data_addtolist LIST=\"__scl_unicode\" ITEM=0",
+                                "data_replaceitemoflist LIST=\"__scl_unicode\" INDEX=1 ITEM=0",
+                                "data_deleteoflist LIST=\"__scl_unicode\" INDEX=1",
+                                "data_insertatlist LIST=\"__scl_unicode\" INDEX=1 ITEM=0",
+                                "data_deletealloflist LIST=\"__scl_unicode\""})
+            reject(text, "", void_type(), {}, {}, true);
+        reject("looks_costumenumbername NUMBER_NAME=\"bad\"", "=r", integer(32));
+        Project unicode;
+        (void)assemble(unicode, "data_lengthoflist LIST=\"__scl_unicode\"", "=r", integer(32));
+        require(unicode.lists.at("__scl_unicode").size() == 3, "Unicode table is not initialized");
+        require(unicode.lists.at("__scl_unicode")[0].get<std::string>().front() == '\0', "Unicode NUL is missing");
+        // All entries are scalar-only UTF-8: the serializer rejects unpaired surrogates.
+        (void)unicode.lists.dump();
+        (void)assemble(unicode, "looks_switchcostumeto COSTUME=\"test::idle\"; looks_nextcostume", "", void_type(), {}, {}, true);
 
         Project pen;
         auto drawing = assemble(pen,

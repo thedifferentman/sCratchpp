@@ -1187,8 +1187,9 @@ Json read_modules(const std::vector<std::string>& paths, const FrontendOptions& 
             internalize+="preserve-gv="+root;first=false;
         }
         internalize+=">,globaldce";
-        if(!pipeline.empty())pipeline+=',';
-        pipeline+=internalize;
+        // Prune before optimizing large bitcode libraries as well as afterwards.
+        // Optimizing unreachable locale/charconv code first can be prohibitively slow.
+        pipeline = pipeline.empty() ? internalize : internalize + ',' + pipeline + ',' + internalize;
     }
     if (!pipeline.empty()) {
         LLVMPassBuilderOptionsRef pass_options = LLVMCreatePassBuilderOptions();

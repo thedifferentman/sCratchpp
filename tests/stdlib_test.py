@@ -145,7 +145,8 @@ def main() -> int:
                                   *defines, str(source), "-o", str(bc)], 120)
         if entry["clang"]["code"] == 0:
             entry["compilerSha256"] = digest(compiler)
-            entry["compiler"] = execute([str(compiler), str(bc), *bitcode, "-o", str(sb3)], 180)
+            entry["compiler"] = execute([str(compiler), str(bc), *bitcode, "--whole-program",
+                                         "--memory", str(manifest.get("memory_bytes", 65536)), "-o", str(sb3)], 180)
         entry["passed"] = entry.get("compiler", {}).get("code") == 0
         save_report()
         if entry["passed"]:

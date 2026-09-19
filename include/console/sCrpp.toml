@@ -1,0 +1,16 @@
+version = 1
+
+[package]
+name = "console"
+version = "0.3.0"
+resource_namespace = "__scl_console"
+
+[library]
+sources = ["console.cpp", "stdio.cpp"]
+include_dirs = ["include"]
+
+[dependencies]
+events = { version = "0.1.0", path = "../events" }
+pte = { version = "0.1.0", path = "../pte" }
+
+triangle = { version = "0.1.1", path = "../triangle" }

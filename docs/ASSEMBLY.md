@@ -17,13 +17,26 @@
 | 有返回值 | `$0` 为输出，`$1` 为第一个输入，依次增加 |
 | `void` 返回 | `$0` 为第一个输入，依次增加；没有可赋值的输出 |
 
-输入和输出类型暂限 `i1` 至 `i32`。`i2` 至 `i32` 输入按有符号二进制补码解码；`i1` 输入保留数字 `0/1`，不解码成 `0/-1`。所有 LLVM 输入在模板开始前读取并保存，后面的列表或变量修改不会让输入重新求值。
+输入类型限 `i1` 至 `i32`；输出支持这些整数以及 `double`（IEEE binary64）。`i2` 至 `i32` 输入按有符号二进制补码解码；`i1` 输入保留数字 `0/1`，不解码成 `0/-1`。所有 LLVM 输入在模板开始前读取并保存，后面的列表或变量修改不会让输入重新求值。
 
-输出先按 Scratch 普通数值转换，再向零截断，并对 `2^位宽` 取模，最后拆成字节。因此 `-2.5 → i32` 得到 `0xfffffffe`，`128 → i8` 得到 `0x80`。布尔值成为 `0/1`；无法转换的文本、NaN 和正负无穷转换为零。非整字节整数的最高字节只保留有效位。
+整数输出先按 Scratch 普通数值转换，再向零截断，并对 `2^位宽` 取模，最后拆成字节。因此 `-2.5 → i32` 得到 `0xfffffffe`，`128 → i8` 得到 `0x80`。布尔值成为 `0/1`；无法转换的文本、NaN 和正负无穷转换为零。非整字节整数的最高字节只保留有效位。
+
+`double` 输出将 Scratch 原生数值精确编码为 8 个 IEEE 字节，保留小数、次正规数、正负零与无穷；NaN 输出规范 quiet NaN（不保留 payload），无法转换的其他文本为零。例如 `asm volatile("sensing_dayssince2000" : "=r"(days));` 中 `days` 可声明为 `double`，不会丢失日期中的时间小数。此转换不依赖 SoftFloat；之后的 LLVM 浮点计算仍走正常的精确运行时。
+
+支持布尔参数报告器 `argument_reporter_boolean VALUE="is turbowarp?"`，供 `scratch::is_turbowarp()` 使用。TW 对这个未绑定的特殊参数返回真（包括解释模式），原版返回零。输出仍是原版核心 opcode，不引入 `tw` 扩展依赖；`is_turbowarp` 是 C++ 接口名称，不是另造的积木 opcode。
 
 这是 Scratch 原生 opcode 的数值接口。模板中的乘除等仍采用 Scratch 本身的数值语义；例如很大的整数乘法可能失去低位精度。需要完整 LLVM 整数语义的程序应使用普通 LLVM 运算，让字节后端处理。
 
-目前明确拒绝 `float`、`double`、指针、聚合值、超过 32 位的数值桥接；这些诊断不会妨碍普通 LLVM IR 中由其他模块支持的相应类型。也拒绝多输出、读写/绑定输出、固定寄存器、内存操作数、立即数专属约束以及其他 clobber。
+需要 C++ 字符串输入时，SDK 的 `scratch::set_string(const std::string&)` 会将 UTF-8 转换到原生变量 `__scl_string`，然后在汇编中读取它。例如：
+
+```cpp
+scratch::set_string(name);
+asm volatile("looks_switchcostumeto COSTUME=(data_variable VARIABLE=\"__scl_string\")");
+```
+
+这不改变 `r` 操作数的整数限制，也不将字符串作为可执行汇编解释。造型相关 opcode 包括 `looks_switchcostumeto COSTUME=...`、`looks_nextcostume`、`looks_costumenumbername NUMBER_NAME="number"`（或 `"name"`）。`__scl_unicode` 是字符串转换按需加入的只读常量表，不能通过汇编修改。
+
+目前明确拒绝浮点输入、`float` 输出、指针、聚合值以及超过 32 位的整数桥接；这些诊断不会妨碍普通 LLVM IR 中由其他模块支持的相应类型。也拒绝多输出、读写/绑定输出、固定寄存器、内存操作数、立即数专属约束以及其他 clobber。
 
 ## 模板语法
 
@@ -156,3 +169,5 @@ void scratch_memory_barrier(void) {
 `tests/assembly_test.cpp` 检查解析、约束、静态控制流、负值桥接及拒绝路径，并生成 `assembly-smoke.sb3`、`assembly-pen.sb3`。`tests/assembly_vm.cjs <输出目录>` 在原版 Scratch VM 与 TurboWarp 编译模式中执行它们。
 
 数值用例覆盖负 `i32`、最小整数、`i8` 回绕、`i1`、布尔运算、负小数截断、重复输出赋值、变量与列表、循环、嵌套 reporter、NaN/无穷处理及输入快照。画笔用例检查扩展加载和积木运行，不声称验证实际像素；当前测试运行器没有 renderer。
+
+`double` 桥接另覆盖 15 个确定性结果的 120 字节检查，包括正负零、分数、最大有限数、最小正规数、最小／最大次正规数及 NaN／无穷，并将实际天数 reporter 的 8 字节结果与宿主 binary64 表示逐字节对照。`tests/fixtures/asm_float.ll` 通过完整 LLVM→SB3 流水线验证位模式和日期 reporter；这些用例均在原版 VM 和 TW 编译模式执行。

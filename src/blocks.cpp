@@ -60,8 +60,9 @@ public:
     Json debug_points = Json::object();
     std::map<std::string, ProcInfo> procedures;
 
-    Builder(const Json& initial_variables, const Json& initial_lists, const Json& initial_extensions)
-        : initial_variables_(initial_variables), initial_lists_(initial_lists) {
+    Builder(const Json& initial_variables, const Json& initial_lists, const Json& initial_extensions,
+            const std::set<std::string>& readonly_lists)
+        : initial_variables_(initial_variables), initial_lists_(initial_lists), readonly_lists_(readonly_lists) {
         if (!initial_variables.is_object() || !initial_lists.is_object() || !initial_extensions.is_array())
             throw Error("Project variables/lists must be objects and extensions must be an array");
         for (const auto& entry : initial_variables.items()) {
@@ -124,6 +125,12 @@ public:
         node(id)["y"] = 0;
         node(id)["next"] = sequence(body, id);
     }
+    void key_hat(const std::string& key, const Script& body, std::size_t index) {
+        const auto id=block("event_whenkeypressed",nullptr,false,true);
+        node(id)["x"]=420*index;node(id)["y"]=0;
+        node(id)["fields"]["KEY_OPTION"]=Json::array({key,nullptr});
+        node(id)["next"]=sequence(body,id);
+    }
     void validate() const {
         // Validate references and their ownership before emitting an archive. This catches
         // broken parent/next links even when a tolerant VM could otherwise load the file.
@@ -157,6 +164,7 @@ public:
 private:
     Json initial_variables_;
     Json initial_lists_;
+    const std::set<std::string>& readonly_lists_;
     std::size_t counter_ = 0;
     std::vector<Json> block_nodes_;
     std::unordered_map<std::string, std::size_t> block_indices_;
@@ -213,6 +221,10 @@ private:
         const auto id = block(op, parent, ast.value("shadow", false));
         if (ast.contains("debug_point")) debug_points[id] = ast.at("debug_point");
         node(id)["fields"] = normalize_fields(ast.value("fields", Json::object()));
+        static const std::set<std::string> list_writes={"data_addtolist","data_deleteoflist","data_deletealloflist","data_insertatlist","data_replaceitemoflist"};
+        if(list_writes.count(op) && node(id)["fields"].contains("LIST") &&
+           readonly_lists_.count(node(id)["fields"]["LIST"][0].get<std::string>()))
+            throw Error("Read-only resource list cannot be modified: "+node(id)["fields"]["LIST"][0].get<std::string>());
         if (op == "procedures_call" && ast.contains("callee")) {
             const auto name = ast.at("callee").get<std::string>();
             const auto found = procedures.find(name);
@@ -413,13 +425,111 @@ void Project::procedure(const std::string& name, const std::vector<std::string>&
 }
 void Project::green_flag(Script body) { hats_.push_back(std::move(body)); }
 Json Project::build() {
-    Builder builder(variables, lists, extensions);
+    Builder builder(variables, lists, extensions,readonly_lists);
     for (const auto& p : procedures_) builder.register_procedure(p.name, p.params);
-    for (std::size_t i = 0; i < hats_.size(); ++i) builder.hat(hats_[i], i);
+    struct Collector { std::string name; Script body; };
+    struct KeyHat { std::string key; Script body; };
+    std::vector<Collector> collectors;
+    std::vector<KeyHat> key_hats;
+    Script event_startup;
+    for(size_t i=0;i<resource_events.size();++i) {
+        const auto& event=resource_events[i];
+        const std::string type=event.at("type"), queue=event.at("queue"), enabled=event.at("enabled");
+        const std::string name="__scl_event_"+type+"_"+std::to_string(i);
+        const auto dropped=enabled+"_dropped";
+        builder.register_procedure(name,{"code","key"});
+        auto active=land(eq(var(enabled),1),eq(var("__scl_status"),"running"));
+        auto pressed=expr("sensing_keypressed",{{"KEY_OPTION",arg("key")}});
+        Json accept;
+        if(type=="wheel") {
+            accept=lnot(pressed);
+            key_hats.push_back({"up arrow",{call(name,{1,"up arrow"})}});
+            key_hats.push_back({"down arrow",{call(name,{-1,"down arrow"})}});
+        } else if(type=="keyboard") {
+            // Wheel IO also fires up/down hats. Only those two keys need a
+            // live-state filter. Other hats retain short presses after release.
+            accept=lor(lnot(lor(eq(arg("code"),0x110001),eq(arg("code"),0x110003))),pressed);
+            auto add_key=[&](const std::string& key,int code) {
+                key_hats.push_back({key,{call(name,{code,key})}});
+            };
+            for(int code=33;code<=126;++code) {
+                if(code>='a' && code<='z')continue; // Scratch folds case.
+                add_key(std::string(1,static_cast<char>(code)),code);
+            }
+            add_key("space",32);add_key("enter",13);
+            add_key("left arrow",0x110000);add_key("up arrow",0x110001);
+            add_key("right arrow",0x110002);add_key("down arrow",0x110003);
+            // These standard hat fields are recognized by TurboWarp. Vanilla
+            // Scratch never fires them; no extension or extra sprite is used.
+            add_key("backspace",8);add_key("delete",127);add_key("escape",27);
+            add_key("shift",0x110004);add_key("caps lock",0x110005);
+            add_key("scroll lock",0x110006);add_key("control",0x110007);
+            add_key("insert",0x110008);add_key("home",0x110009);add_key("end",0x11000a);
+            add_key("page up",0x11000b);add_key("page down",0x11000c);
+        } else throw Error("Unknown resource event type: "+type);
+        auto room=lt(expr("data_lengthoflist",Json::object(),{{"LIST",queue}}),event.at("capacity"));
+        Script enqueue{append(queue,arg("code"))};
+        if(type=="keyboard") {
+            const auto value=name+"_value";
+            auto tw=expr("argument_reporter_boolean",Json::object(),{{"VALUE","is turbowarp?"}});
+            auto shift=expr("sensing_keypressed",{{"KEY_OPTION","shift"}});
+            enqueue={set(value,arg("code")),
+                // Sample Shift on the native collector thread, before the
+                // event waits in the queue. Caps Lock is deliberately ignored.
+                iff(land(tw,land(land(gt(arg("code"),64),lt(arg("code"),91)),lnot(shift))),
+                    {set(value,add(arg("code"),32))}),append(queue,var(value))};
+        }
+        collectors.push_back({name,{iff(land(active,accept),{iff(room,enqueue,
+            {stmt("data_changevariableby",{{"VALUE",1}},{{"VARIABLE",dropped}})})})}});
+        event_startup.push_back(set(enabled,0));event_startup.push_back(set(dropped,0));event_startup.push_back(clear(queue));
+    }
+    for (std::size_t i = 0; i < hats_.size(); ++i) {
+        if(costumes.empty() && event_startup.empty())builder.hat(hats_[i], i);
+        else {
+            // A second green flag must not reuse the previous run's costume.
+            // Explicit arithmetic forces a numeric index even in vanilla VM.
+            Script startup=event_startup;
+            if(!costumes.empty())extend(startup,{stmt("looks_hide"),stmt("looks_switchcostumeto",{{"COSTUME",add(1,0)}})});
+            extend(startup,hats_[i]);builder.hat(startup,i);
+        }
+    }
     for (std::size_t i = 0; i < procedures_.size(); ++i) builder.procedure(procedures_[i].name, procedures_[i].body, i);
+    for(size_t i=0;i<key_hats.size();++i)
+        builder.key_hat(key_hats[i].key,key_hats[i].body,hats_.size()+i);
+    for(size_t i=0;i<collectors.size();++i)
+        builder.procedure(collectors[i].name,collectors[i].body,procedures_.size()+i);
     builder.validate();
     auto stage = target(true);
+    Json settings{{"framerate",60},{"high_quality_pen",true},{"offscreen_sprites",true},
+        {"interpolation",false},{"unlimited_clones",false},{"remove_limits",false},
+        {"stage_width",480},{"stage_height",360}};
+    if (!turbowarp_settings.is_object()) throw Error("turbowarp settings must be an object");
+    for (auto it=turbowarp_settings.begin();it!=turbowarp_settings.end();++it) {
+        if (!settings.contains(it.key())) throw Error("unsupported turbowarp setting: "+it.key());
+        settings[it.key()]=it.value();
+    }
+    for (const auto* key : {"high_quality_pen","offscreen_sprites","interpolation","unlimited_clones","remove_limits"})
+        if (!settings[key].is_boolean()) throw Error(std::string("turbowarp.")+key+" must be boolean");
+    if (!settings["framerate"].is_number() || !(settings["framerate"].get<double>()>=0 && settings["framerate"].get<double>()<=250))
+        throw Error("turbowarp.framerate must be a number between 0 and 250 (0 uses the display refresh rate)");
+    for (const auto* key : {"stage_width","stage_height"})
+        if (!settings[key].is_number_integer() || settings[key].get<double>()<1 || settings[key].get<double>()>8192)
+            throw Error(std::string("turbowarp.")+key+" must be an integer between 1 and 8192");
+    Json options{{"framerate",settings["framerate"]},{"hq",settings["high_quality_pen"]},
+        {"interpolation",settings["interpolation"]},{"turbo",false},
+        {"width",settings["stage_width"]},{"height",settings["stage_height"]},
+        {"runtimeOptions",Json{{"fencing",!settings["offscreen_sprites"].get<bool>()},
+            {"miscLimits",!settings["remove_limits"].get<bool>()},{"maxClones",300}}}};
+    // TurboWarp uses extended JSON with a literal Infinity for unlimited clones.
+    if (settings["unlimited_clones"].get<bool>()) options["runtimeOptions"]["maxClones"]="__tw_infinity__";
+    auto options_text=options.dump();
+    const auto infinity=options_text.find("\"__tw_infinity__\"");
+    if (infinity!=std::string::npos) options_text.replace(infinity,std::string("\"__tw_infinity__\"").size(),"Infinity");
+    stage["comments"]["scrpp_tw_settings"]=Json{{"blockId",nullptr},{"x",50},{"y",50},
+        {"width",350},{"height",170},{"minimized",true},
+        {"text","Configuration for https://turbowarp.org/\nGenerated by sCr++; configure in sCrpp.toml.\n"+options_text+" // _twconfig_"}};
     auto sprite = target(false);
+    for(const auto& costume:costumes)sprite["costumes"].push_back(costume);
     sprite["variables"] = std::move(builder.variables);
     sprite["lists"] = std::move(builder.lists);
     sprite["blocks"] = builder.take_blocks();
@@ -444,6 +554,17 @@ void Project::save(const std::string& path) {
     std::vector<std::pair<std::string, std::string>> members;
     if (extension != ".json") {
         members = {{"project.json", project.dump()}, {std::string(costume_id) + ".svg", costume_svg}};
+        for(const auto& asset:assets) {
+            // Only content-addressed SVG names are admitted by the resource
+            // linker. Keep the public builder API from introducing ZIP paths.
+            if(asset.first.size()!=36 || asset.first.substr(32)!=".svg" ||
+               !std::all_of(asset.first.begin(),asset.first.begin()+32,[](char c){return (c>='0'&&c<='9')||(c>='a'&&c<='f');}))
+                throw Error("Invalid resource archive name: "+asset.first);
+            const auto existing=std::find_if(members.begin(),members.end(),[&](const auto& member){return member.first==asset.first;});
+            if(existing!=members.end()) {
+                if(existing->second!=asset.second)throw Error("Conflicting resource archive member: "+asset.first);
+            }else members.push_back(asset);
+        }
         // Validate all archive names before opening/truncating the output file.
         append_extra_files(members, files);
     }

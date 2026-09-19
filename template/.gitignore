@@ -1,4 +1,5 @@
 /build/
+/.scrate/
 /toolchain.local.json
 __pycache__/
 *.py[cod]
